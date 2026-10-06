@@ -1,0 +1,6086 @@
+--==================================================
+-- TRIBE SURVIVAL HUB V4
+-- ROBLOX STUDIO - LOCALSCRIPT
+--
+-- MENU:
+-- MAIN
+-- AIM
+-- AUTO PLAY
+-- SPEED
+-- AURA
+-- TẦM NHÌN
+-- MISC
+--
+-- TẦM NHÌN:
+-- • DỊCH CHUYỂN LÊN ON/OFF
+-- • KHOẢNG CÁCH MỖI LẦN: 1 - 30M
+-- • DELAY: 0.05 - 20S
+--
+-- DEFAULT:
+-- • ALL FEATURES OFF
+--==================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local VirtualUser = game:GetService("VirtualUser")
+local PathfindingService = game:GetService("PathfindingService")
+
+local LP = Players.LocalPlayer
+local PG = LP:WaitForChild("PlayerGui")
+
+--==================================================
+-- SETTINGS
+--==================================================
+
+local ESP = false
+local AIM = false
+local AUTO_FARM = false
+local AI_AUTO_PLAY = false
+
+local FARM_SPEED = 16
+local FARM_TYPE = "Wood"
+
+--==================================================
+-- SPEED
+--==================================================
+
+local SPEED = false
+local SPEED_DISTANCE = 2
+
+local SPEED_MIN = 1
+local SPEED_MAX = 10
+
+local SPEED_INTERVAL = 0.12
+local speedDragging = false
+
+--==================================================
+-- AI
+--==================================================
+
+local AI_TARGET_MODE = "AUTO"
+
+local AI_REACH_DISTANCE = 5
+local AI_UPDATE = 0.35
+local AI_WEAPON_INTERVAL = 0.3
+local AI_PATH_RECOMPUTE = 0.8
+
+local AI_LAST_PATH = 0
+local AI_LAST_TARGET = nil
+local AI_WAYPOINT_INDEX = 1
+local AI_WAYPOINTS = {}
+
+local AI_WEAPON = false
+
+--==================================================
+-- AURA
+--==================================================
+
+local AURA_TELEPORT = false
+
+local AURA_DISTANCE = 12
+local AURA_MIN_DISTANCE = 1
+local AURA_MAX_DISTANCE = 30
+
+local AURA_INTERVAL = 0.3
+local AURA_MIN_INTERVAL = 0.1
+local AURA_MAX_INTERVAL = 1
+
+local auraDistanceDragging = false
+local auraIntervalDragging = false
+
+--==================================================
+-- TẦM NHÌN / DỊCH CHUYỂN LÊN
+--==================================================
+
+local VIEW_MOVE = false
+
+-- Khoảng cách dịch chuyển mỗi lần
+local VIEW_DISTANCE = 30
+local VIEW_DISTANCE_MIN = 1
+local VIEW_DISTANCE_MAX = 30
+
+-- Delay giữa mỗi lần dịch chuyển
+local VIEW_DELAY = 0.05
+local VIEW_DELAY_MIN = 0.05
+local VIEW_DELAY_MAX = 20
+
+local viewDistanceDragging = false
+local viewDelayDragging = false
+
+--==================================================
+-- AIM
+--==================================================
+
+local AIM_TARGET = nil
+
+local AIM_DISTANCE = 60
+local AIM_MIN_DISTANCE = 1
+local AIM_MAX_DISTANCE = 60
+
+local AIM_AUTO_ROTATE_OLD = true
+local AIMDragging = false
+
+--==================================================
+-- POWER
+--==================================================
+
+local POWER = false
+local POWER_DISTANCE = 10
+local POWER_LOCK = false
+local POWER_COOLDOWN = false
+
+local powerDragging = false
+
+--==================================================
+-- MISC
+--==================================================
+
+local ANTI_AFK = false
+local FULL_BRIGHT = false
+local NO_FOG = false
+
+local WARNING = false
+local WARNING_DISTANCE = 200
+
+--==================================================
+-- ANTI WATER
+--==================================================
+
+local ANTI_WATER = false
+
+local PART_SIZE =
+	Vector3.new(
+		0.01,
+		0.009,
+		0.01
+	)
+
+local PART_OFFSET =
+	Vector3.new(
+		0,
+		-3.05,
+		0
+	)
+
+--==================================================
+-- CACHE
+--==================================================
+
+local MAX_PLAYER = 3
+local MAX_RESOURCE = 3
+
+local RESOURCE_DELAY = 0.8
+local PLAYER_DELAY = 0.5
+
+local Cache = {
+	Wood = {},
+	Stone = {},
+	Apple = {},
+	Food = {}
+}
+
+local PlayersCache = {}
+
+--==================================================
+-- CHARACTER
+--==================================================
+
+local Character
+local Humanoid
+local Root
+local AntiPart
+
+--==================================================
+-- ANTI WATER PART
+--==================================================
+
+local function CreateAntiPart()
+
+	if not ANTI_WATER then
+		return
+	end
+
+	if not Character
+		or not Character.Parent
+		or not Root
+		or not Root.Parent then
+
+		return
+	end
+
+	if AntiPart then
+		AntiPart:Destroy()
+		AntiPart = nil
+	end
+
+	AntiPart = Instance.new("Part")
+
+	AntiPart.Name =
+		"AntiWaterPart"
+
+	AntiPart.Size =
+		PART_SIZE
+
+	AntiPart.Transparency = 1
+
+	AntiPart.CanCollide = true
+	AntiPart.CanTouch = false
+	AntiPart.CanQuery = false
+
+	AntiPart.Massless = true
+	AntiPart.CastShadow = false
+	AntiPart.Anchored = false
+
+	AntiPart.CFrame =
+		Root.CFrame *
+		CFrame.new(
+			PART_OFFSET
+		)
+
+	AntiPart.Parent =
+		Character
+
+	local Weld =
+		Instance.new(
+			"WeldConstraint"
+		)
+
+	Weld.Part0 = Root
+	Weld.Part1 = AntiPart
+
+	Weld.Parent =
+		AntiPart
+end
+
+--==================================================
+-- CHARACTER SETUP
+--==================================================
+
+local function SetupCharacter(char)
+
+	Character = char
+
+	Humanoid =
+		char:WaitForChild(
+			"Humanoid"
+		)
+
+	Root =
+		char:WaitForChild(
+			"HumanoidRootPart"
+		)
+
+	AI_LAST_TARGET = nil
+	AI_WAYPOINTS = {}
+	AI_WAYPOINT_INDEX = 1
+
+	if AntiPart then
+		AntiPart:Destroy()
+		AntiPart = nil
+	end
+
+	task.wait(0.1)
+
+	if ANTI_WATER then
+		CreateAntiPart()
+	end
+
+	if AIM then
+
+		AIM_AUTO_ROTATE_OLD =
+			Humanoid.AutoRotate
+
+		Humanoid.AutoRotate = false
+	end
+end
+
+if LP.Character then
+	SetupCharacter(
+		LP.Character
+	)
+end
+
+LP.CharacterAdded:Connect(
+	SetupCharacter
+)
+
+--==================================================
+-- REMOVE OLD GUI
+--==================================================
+
+local Old =
+	PG:FindFirstChild(
+		"TribeSurvivalHub"
+	)
+
+if Old then
+	Old:Destroy()
+end
+
+--==================================================
+-- GUI
+--==================================================
+
+local Gui =
+	Instance.new(
+		"ScreenGui"
+	)
+
+Gui.Name =
+	"TribeSurvivalHub"
+
+Gui.ResetOnSpawn = false
+Gui.IgnoreGuiInset = true
+
+Gui.ZIndexBehavior =
+	Enum.ZIndexBehavior.Sibling
+
+Gui.Parent =
+	PG
+
+--==================================================
+-- MAIN WINDOW
+--==================================================
+
+local Main =
+	Instance.new("Frame")
+
+Main.Name =
+	"Main"
+
+Main.Size =
+	UDim2.fromOffset(
+		420,
+		360
+	)
+
+Main.Position =
+	UDim2.new(
+		0.5,
+		-210,
+		0.25,
+		0
+	)
+
+Main.BackgroundColor3 =
+	Color3.fromRGB(
+		25,
+		25,
+		25
+	)
+
+Main.BorderSizePixel = 0
+Main.Active = true
+
+Main.Parent =
+	Gui
+
+local MainCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+MainCorner.CornerRadius =
+	UDim.new(
+		0,
+		10
+	)
+
+MainCorner.Parent =
+	Main
+
+local MainStroke =
+	Instance.new(
+		"UIStroke"
+	)
+
+MainStroke.Thickness =
+	1.5
+
+MainStroke.Color =
+	Color3.fromRGB(
+		0,
+		170,
+		255
+	)
+
+MainStroke.Parent =
+	Main
+
+--==================================================
+-- TITLE
+--==================================================
+
+local Title =
+	Instance.new(
+		"TextLabel"
+	)
+
+Title.Size =
+	UDim2.new(
+		1,
+		-70,
+		0,
+		35
+	)
+
+Title.Position =
+	UDim2.fromOffset(
+		12,
+		0
+	)
+
+Title.BackgroundTransparency = 1
+
+Title.Text =
+	"⚡ TRIBE SURVIVAL V4"
+
+Title.TextColor3 =
+	Color3.new(
+		1,
+		1,
+		1
+	)
+
+Title.Font =
+	Enum.Font.GothamBold
+
+Title.TextSize = 14
+
+Title.TextXAlignment =
+	Enum.TextXAlignment.Left
+
+Title.Parent =
+	Main
+
+--==================================================
+-- HIDE
+--==================================================
+
+local Hide =
+	Instance.new(
+		"TextButton"
+	)
+
+Hide.Size =
+	UDim2.fromOffset(
+		30,
+		28
+	)
+
+Hide.Position =
+	UDim2.new(
+		1,
+		-36,
+		0,
+		4
+	)
+
+Hide.BackgroundColor3 =
+	Color3.fromRGB(
+		55,
+		55,
+		55
+	)
+
+Hide.Text = "-"
+
+Hide.TextColor3 =
+	Color3.new(
+		1,
+		1,
+		1
+	)
+
+Hide.Font =
+	Enum.Font.GothamBold
+
+Hide.TextSize = 16
+
+Hide.BorderSizePixel = 0
+
+Hide.Parent =
+	Main
+
+local HideCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+HideCorner.CornerRadius =
+	UDim.new(
+		0,
+		6
+	)
+
+HideCorner.Parent =
+	Hide
+
+--==================================================
+-- SIDEBAR
+--==================================================
+
+local Sidebar =
+	Instance.new(
+		"Frame"
+	)
+
+Sidebar.Size =
+	UDim2.new(
+		0,
+		105,
+		1,
+		-45
+	)
+
+Sidebar.Position =
+	UDim2.fromOffset(
+		8,
+		38
+	)
+
+Sidebar.BackgroundColor3 =
+	Color3.fromRGB(
+		32,
+		32,
+		32
+	)
+
+Sidebar.BorderSizePixel = 0
+
+Sidebar.Parent =
+	Main
+
+local SidebarCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+SidebarCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+SidebarCorner.Parent =
+	Sidebar
+
+--==================================================
+-- CONTENT
+--==================================================
+
+local Content =
+	Instance.new(
+		"Frame"
+	)
+
+Content.Size =
+	UDim2.new(
+		1,
+		-125,
+		1,
+		-45
+	)
+
+Content.Position =
+	UDim2.fromOffset(
+		117,
+		38
+	)
+
+Content.BackgroundColor3 =
+	Color3.fromRGB(
+		30,
+		30,
+		30
+	)
+
+Content.BorderSizePixel = 0
+Content.ClipsDescendants = true
+
+Content.Parent =
+	Main
+
+local ContentCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+ContentCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+ContentCorner.Parent =
+	Content
+
+--==================================================
+-- PAGE SYSTEM
+--==================================================
+
+local Pages = {}
+
+local function CreatePage(name)
+
+	local Page =
+		Instance.new(
+			"ScrollingFrame"
+		)
+
+	Page.Name = name
+
+	Page.Size =
+		UDim2.fromScale(
+			1,
+			1
+		)
+
+	Page.BackgroundTransparency = 1
+	Page.BorderSizePixel = 0
+
+	Page.ScrollBarThickness = 3
+
+	Page.CanvasSize =
+		UDim2.new(
+			0,
+			0,
+			0,
+			560
+		)
+
+	Page.Visible = false
+
+	Page.Parent =
+		Content
+
+	Pages[name] =
+		Page
+
+	return Page
+end
+
+local MainPage =
+	CreatePage("MAIN")
+
+local AimPage =
+	CreatePage("AIM")
+
+local AutoPlayPage =
+	CreatePage(
+		"AUTO PLAY"
+	)
+
+local SpeedPage =
+	CreatePage("SPEED")
+
+local AuraPage =
+	CreatePage("AURA")
+
+local ViewPage =
+	CreatePage(
+		"TẦM NHÌN"
+	)
+
+local MiscPage =
+	CreatePage("MISC")
+
+--==================================================
+-- SIDEBAR BUTTON
+--==================================================
+
+local SidebarButtons = {}
+
+local function CreateSideButton(
+	text,
+	y
+)
+
+	local Button =
+		Instance.new(
+			"TextButton"
+		)
+
+	Button.Size =
+		UDim2.new(
+			1,
+			-10,
+			0,
+			34
+		)
+
+	Button.Position =
+		UDim2.fromOffset(
+			5,
+			y
+		)
+
+	Button.BackgroundColor3 =
+		Color3.fromRGB(
+			48,
+			48,
+			48
+		)
+
+	Button.Text =
+		text
+
+	Button.TextColor3 =
+		Color3.fromRGB(
+			220,
+			220,
+			220
+		)
+
+	Button.Font =
+		Enum.Font.GothamBold
+
+	Button.TextSize = 8
+
+	Button.BorderSizePixel = 0
+
+	Button.Parent =
+		Sidebar
+
+	local Corner =
+		Instance.new(
+			"UICorner"
+		)
+
+	Corner.CornerRadius =
+		UDim.new(
+			0,
+			6
+		)
+
+	Corner.Parent =
+		Button
+
+	SidebarButtons[text] =
+		Button
+
+	return Button
+end
+
+local MainTab =
+	CreateSideButton(
+		"MAIN",
+		5
+	)
+
+local AimTab =
+	CreateSideButton(
+		"AIM",
+		41
+	)
+
+local AutoPlayTab =
+	CreateSideButton(
+		"AUTO PLAY",
+		77
+	)
+
+local SpeedTab =
+	CreateSideButton(
+		"SPEED",
+		113
+	)
+
+local AuraTab =
+	CreateSideButton(
+		"AURA",
+		149
+	)
+
+local ViewTab =
+	CreateSideButton(
+		"TẦM NHÌN",
+		185
+	)
+
+local MiscTab =
+	CreateSideButton(
+		"MISC",
+		221
+	)
+
+--==================================================
+-- TAB SWITCH
+--==================================================
+
+local function OpenTab(name)
+
+	for pageName,page in pairs(
+		Pages
+	) do
+
+		page.Visible =
+			pageName == name
+	end
+
+	for buttonName,button in pairs(
+		SidebarButtons
+	) do
+
+		if buttonName == name then
+
+			button.BackgroundColor3 =
+				Color3.fromRGB(
+					0,
+					170,
+					255
+				)
+
+			button.TextColor3 =
+				Color3.new(
+					1,
+					1,
+					1
+				)
+
+		else
+
+			button.BackgroundColor3 =
+				Color3.fromRGB(
+					48,
+					48,
+					48
+				)
+
+			button.TextColor3 =
+				Color3.fromRGB(
+					220,
+					220,
+					220
+				)
+		end
+	end
+end
+
+MainTab.MouseButton1Click:Connect(
+	function()
+		OpenTab("MAIN")
+	end
+)
+
+AimTab.MouseButton1Click:Connect(
+	function()
+		OpenTab("AIM")
+	end
+)
+
+AutoPlayTab.MouseButton1Click:Connect(
+	function()
+		OpenTab("AUTO PLAY")
+	end
+)
+
+SpeedTab.MouseButton1Click:Connect(
+	function()
+		OpenTab("SPEED")
+	end
+)
+
+AuraTab.MouseButton1Click:Connect(
+	function()
+		OpenTab("AURA")
+	end
+)
+
+ViewTab.MouseButton1Click:Connect(
+	function()
+		OpenTab("TẦM NHÌN")
+	end
+)
+
+MiscTab.MouseButton1Click:Connect(
+	function()
+		OpenTab("MISC")
+	end
+)
+
+--==================================================
+-- HELPERS
+--==================================================
+
+local function PageTitle(
+	parent,
+	text
+)
+
+	local Label =
+		Instance.new(
+			"TextLabel"
+		)
+
+	Label.Size =
+		UDim2.new(
+			1,
+			-20,
+			0,
+			30
+		)
+
+	Label.Position =
+		UDim2.fromOffset(
+			10,
+			8
+		)
+
+	Label.BackgroundTransparency = 1
+
+	Label.Text =
+		text
+
+	Label.TextColor3 =
+		Color3.new(
+			1,
+			1,
+			1
+		)
+
+	Label.Font =
+		Enum.Font.GothamBold
+
+	Label.TextSize = 14
+
+	Label.TextXAlignment =
+		Enum.TextXAlignment.Left
+
+	Label.Parent =
+		parent
+
+	return Label
+end
+
+local function CreateButton(
+	parent,
+	text,
+	y
+)
+
+	local Button =
+		Instance.new(
+			"TextButton"
+		)
+
+	Button.Size =
+		UDim2.new(
+			1,
+			-20,
+			0,
+			34
+		)
+
+	Button.Position =
+		UDim2.fromOffset(
+			10,
+			y
+		)
+
+	Button.BackgroundColor3 =
+		Color3.fromRGB(
+			50,
+			50,
+			50
+		)
+
+	Button.Text =
+		text
+
+	Button.TextColor3 =
+		Color3.new(
+			1,
+			1,
+			1
+		)
+
+	Button.Font =
+		Enum.Font.GothamBold
+
+	Button.TextSize = 11
+
+	Button.BorderSizePixel = 0
+
+	Button.Parent =
+		parent
+
+	local Corner =
+		Instance.new(
+			"UICorner"
+		)
+
+	Corner.CornerRadius =
+		UDim.new(
+			0,
+			7
+		)
+
+	Corner.Parent =
+		Button
+
+	return Button
+end
+
+--==================================================
+-- MAIN PAGE
+--==================================================
+
+PageTitle(
+	MainPage,
+	"MAIN"
+)
+
+local ESPButton =
+	CreateButton(
+		MainPage,
+		"ESP : OFF",
+		45
+	)
+
+local FarmButton =
+	CreateButton(
+		MainPage,
+		"AUTO FARM : OFF",
+		85
+	)
+
+local FarmSelect =
+	CreateButton(
+		MainPage,
+		"FARM: Wood ▼",
+		125
+	)
+
+local PowerButton =
+	CreateButton(
+		MainPage,
+		"POWER : OFF",
+		165
+	)
+
+local PowerDistanceLabel =
+	Instance.new(
+		"TextLabel"
+	)
+
+PowerDistanceLabel.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		20
+	)
+
+PowerDistanceLabel.Position =
+	UDim2.fromOffset(
+		10,
+		210
+	)
+
+PowerDistanceLabel.BackgroundTransparency = 1
+
+PowerDistanceLabel.Text =
+	"POWER DISTANCE: 10"
+
+PowerDistanceLabel.TextColor3 =
+	Color3.fromRGB(
+		200,
+		200,
+		200
+	)
+
+PowerDistanceLabel.Font =
+	Enum.Font.GothamBold
+
+PowerDistanceLabel.TextSize = 10
+
+PowerDistanceLabel.TextXAlignment =
+	Enum.TextXAlignment.Left
+
+PowerDistanceLabel.Parent =
+	MainPage
+
+local FarmTypes = {
+	"Wood",
+	"Stone",
+	"Apple",
+	"Food",
+	"Player"
+}
+
+local FarmIndex = 1
+
+FarmSelect.MouseButton1Click:Connect(
+	function()
+
+		FarmIndex += 1
+
+		if FarmIndex >
+			#FarmTypes then
+
+			FarmIndex = 1
+		end
+
+		FARM_TYPE =
+			FarmTypes[
+				FarmIndex
+			]
+
+		FarmSelect.Text =
+			"FARM: " ..
+			FARM_TYPE ..
+			" ▼"
+	end
+)
+
+ESPButton.MouseButton1Click:Connect(
+	function()
+
+		ESP =
+			not ESP
+
+		ESPButton.Text =
+			ESP and
+			"ESP : ON" or
+			"ESP : OFF"
+
+		ESPButton.BackgroundColor3 =
+			ESP and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+	end
+)
+
+FarmButton.MouseButton1Click:Connect(
+	function()
+
+		AUTO_FARM =
+			not AUTO_FARM
+
+		FarmButton.Text =
+			AUTO_FARM and
+			"AUTO FARM : ON" or
+			"AUTO FARM : OFF"
+
+		FarmButton.BackgroundColor3 =
+			AUTO_FARM and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+	end
+)
+
+local function SetPower(
+	value
+)
+
+	POWER = value
+
+	PowerButton.Text =
+		POWER and
+		"POWER : ON" or
+		"POWER : OFF"
+
+	PowerButton.BackgroundColor3 =
+		POWER and
+		Color3.fromRGB(
+			40,
+			180,
+			40
+		) or
+		Color3.fromRGB(
+			50,
+			50,
+			50
+		)
+end
+
+PowerButton.MouseButton1Click:Connect(
+	function()
+
+		SetPower(
+			not POWER
+		)
+	end
+)
+
+--==================================================
+-- POWER SLIDER
+--==================================================
+
+local PowerSlider =
+	Instance.new(
+		"Frame"
+	)
+
+PowerSlider.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		14
+	)
+
+PowerSlider.Position =
+	UDim2.fromOffset(
+		10,
+		235
+	)
+
+PowerSlider.BackgroundColor3 =
+	Color3.fromRGB(
+		55,
+		55,
+		55
+	)
+
+PowerSlider.BorderSizePixel = 0
+PowerSlider.Active = true
+
+PowerSlider.Parent =
+	MainPage
+
+local PowerSliderCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+PowerSliderCorner.CornerRadius =
+	UDim.new(
+		0,
+		7
+	)
+
+PowerSliderCorner.Parent =
+	PowerSlider
+
+local PowerKnob =
+	Instance.new(
+		"Frame"
+	)
+
+PowerKnob.Size =
+	UDim2.fromOffset(
+		14,
+		14
+	)
+
+PowerKnob.Position =
+	UDim2.new(
+		0,
+		-7,
+		0,
+		0
+	)
+
+PowerKnob.BackgroundColor3 =
+	Color3.fromRGB(
+		0,
+		170,
+		255
+	)
+
+PowerKnob.BorderSizePixel = 0
+
+PowerKnob.Parent =
+	PowerSlider
+
+local PowerKnobCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+PowerKnobCorner.CornerRadius =
+	UDim.new(
+		0,
+		7
+	)
+
+PowerKnobCorner.Parent =
+	PowerKnob
+
+local function SetPowerDistance(
+	x
+)
+
+	local left =
+		PowerSlider.AbsolutePosition.X
+
+	local width =
+		PowerSlider.AbsoluteSize.X
+
+	if width <= 0 then
+		return
+	end
+
+	local scale =
+		math.clamp(
+			(x - left) / width,
+			0,
+			1
+		)
+
+	POWER_DISTANCE =
+		math.floor(
+			10 +
+			scale * 20 +
+			0.5
+		)
+
+	PowerKnob.Position =
+		UDim2.new(
+			scale,
+			-7,
+			0,
+			0
+		)
+
+	PowerDistanceLabel.Text =
+		"POWER DISTANCE: " ..
+		POWER_DISTANCE
+end
+
+PowerSlider.InputBegan:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			powerDragging = true
+
+			SetPowerDistance(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputChanged:Connect(
+	function(input)
+
+		if not powerDragging then
+			return
+		end
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseMovement
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			SetPowerDistance(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputEnded:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			powerDragging = false
+		end
+	end
+)
+
+--==================================================
+-- AIM
+--==================================================
+
+PageTitle(
+	AimPage,
+	"AIM"
+)
+
+local AIMButton =
+	CreateButton(
+		AimPage,
+		"AIM : OFF",
+		45
+	)
+
+local AIMInfo =
+	Instance.new(
+		"TextLabel"
+	)
+
+AIMInfo.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		35
+	)
+
+AIMInfo.Position =
+	UDim2.fromOffset(
+		10,
+		83
+	)
+
+AIMInfo.BackgroundTransparency = 1
+
+AIMInfo.Text =
+	"Aim người chơi gần nhất\n" ..
+	"Chỉ xoay ngang"
+
+AIMInfo.TextColor3 =
+	Color3.fromRGB(
+		190,
+		190,
+		190
+	)
+
+AIMInfo.Font =
+	Enum.Font.Gotham
+
+AIMInfo.TextSize = 10
+
+AIMInfo.TextXAlignment =
+	Enum.TextXAlignment.Left
+
+AIMInfo.Parent =
+	AimPage
+
+local AIMDistanceLabel =
+	Instance.new(
+		"TextLabel"
+	)
+
+AIMDistanceLabel.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		20
+	)
+
+AIMDistanceLabel.Position =
+	UDim2.fromOffset(
+		10,
+		125
+	)
+
+AIMDistanceLabel.BackgroundTransparency = 1
+
+AIMDistanceLabel.Text =
+	"AIM DISTANCE: 60"
+
+AIMDistanceLabel.TextColor3 =
+	Color3.fromRGB(
+		210,
+		210,
+		210
+	)
+
+AIMDistanceLabel.Font =
+	Enum.Font.GothamBold
+
+AIMDistanceLabel.TextSize = 11
+
+AIMDistanceLabel.Parent =
+	AimPage
+
+local AIMSlider =
+	Instance.new(
+		"Frame"
+	)
+
+AIMSlider.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		16
+	)
+
+AIMSlider.Position =
+	UDim2.fromOffset(
+		10,
+		150
+	)
+
+AIMSlider.BackgroundColor3 =
+	Color3.fromRGB(
+		55,
+		55,
+		55
+	)
+
+AIMSlider.BorderSizePixel = 0
+AIMSlider.Active = true
+
+AIMSlider.Parent =
+	AimPage
+
+local AIMSliderCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+AIMSliderCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+AIMSliderCorner.Parent =
+	AIMSlider
+
+local AIMKnob =
+	Instance.new(
+		"Frame"
+	)
+
+AIMKnob.Size =
+	UDim2.fromOffset(
+		16,
+		16
+	)
+
+AIMKnob.Position =
+	UDim2.new(
+		1,
+		-8,
+		0,
+		0
+	)
+
+AIMKnob.BackgroundColor3 =
+	Color3.fromRGB(
+		0,
+		170,
+		255
+	)
+
+AIMKnob.BorderSizePixel = 0
+AIMKnob.Parent =
+	AIMSlider
+
+local AIMKnobCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+AIMKnobCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+AIMKnobCorner.Parent =
+	AIMKnob
+
+local function SetAIMDistance(
+	x
+)
+
+	local left =
+		AIMSlider.AbsolutePosition.X
+
+	local width =
+		AIMSlider.AbsoluteSize.X
+
+	if width <= 0 then
+		return
+	end
+
+	local scale =
+		math.clamp(
+			(x - left) / width,
+			0,
+			1
+		)
+
+	AIM_DISTANCE =
+		math.floor(
+			AIM_MIN_DISTANCE +
+			(
+				AIM_MAX_DISTANCE -
+				AIM_MIN_DISTANCE
+			) *
+			scale +
+			0.5
+		)
+
+	AIMKnob.Position =
+		UDim2.new(
+			scale,
+			-8,
+			0,
+			0
+		)
+
+	AIMDistanceLabel.Text =
+		"AIM DISTANCE: " ..
+		AIM_DISTANCE
+end
+
+AIMSlider.InputBegan:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			AIMDragging = true
+
+			SetAIMDistance(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputChanged:Connect(
+	function(input)
+
+		if not AIMDragging then
+			return
+		end
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseMovement
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			SetAIMDistance(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputEnded:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			AIMDragging = false
+		end
+	end
+)
+
+local function GetCharacterData(
+	player
+)
+
+	if not player
+		or player == LP then
+
+		return nil
+	end
+
+	local character =
+		player.Character
+
+	if not character
+		or not character.Parent then
+
+		return nil
+	end
+
+	local root =
+		character:FindFirstChild(
+			"HumanoidRootPart"
+		)
+
+	local humanoid =
+		character:FindFirstChildOfClass(
+			"Humanoid"
+		)
+
+	if not root
+		or not humanoid
+		or humanoid.Health <= 0 then
+
+		return nil
+	end
+
+	return character,
+		root,
+		humanoid
+end
+
+local function FindNearestPlayer()
+
+	if not Root then
+		return nil
+	end
+
+	local nearest
+	local nearestDistance =
+		AIM_DISTANCE
+
+	for _,player in ipairs(
+		Players:GetPlayers()
+	) do
+
+		if player ~= LP then
+
+			local _,
+				targetRoot,
+				targetHumanoid =
+				GetCharacterData(
+					player
+				)
+
+			if targetRoot
+				and targetHumanoid then
+
+				local distance =
+					(
+						Root.Position -
+						targetRoot.Position
+					).Magnitude
+
+				if distance <=
+					nearestDistance then
+
+					nearestDistance =
+						distance
+
+					nearest =
+						player
+				end
+			end
+		end
+	end
+
+	return nearest
+end
+
+AIMButton.MouseButton1Click:Connect(
+	function()
+
+		AIM =
+			not AIM
+
+		AIMButton.Text =
+			AIM and
+			"AIM : ON" or
+			"AIM : OFF"
+
+		AIMButton.BackgroundColor3 =
+			AIM and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+
+		if Humanoid then
+
+			if AIM then
+
+				AIM_AUTO_ROTATE_OLD =
+					Humanoid.AutoRotate
+
+				Humanoid.AutoRotate = false
+
+			else
+
+				Humanoid.AutoRotate =
+					AIM_AUTO_ROTATE_OLD
+			end
+		end
+
+		if not AIM then
+			AIM_TARGET = nil
+		end
+	end
+)
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			AIM_TARGET =
+				AIM and
+				FindNearestPlayer()
+				or nil
+
+			task.wait(0.05)
+		end
+	end
+)
+
+RunService.RenderStepped:Connect(
+	function()
+
+		if not AIM
+			or not Root
+			or not Humanoid then
+
+			return
+		end
+
+		Humanoid.AutoRotate = false
+
+		local target =
+			AIM_TARGET
+
+		if not target then
+			return
+		end
+
+		local _,
+			targetRoot,
+			targetHumanoid =
+			GetCharacterData(
+				target
+			)
+
+		if not targetRoot
+			or not targetHumanoid then
+
+			AIM_TARGET = nil
+			return
+		end
+
+		local distance =
+			(
+				Root.Position -
+				targetRoot.Position
+			).Magnitude
+
+		if distance >
+			AIM_DISTANCE then
+
+			AIM_TARGET = nil
+			return
+		end
+
+		local targetPosition =
+			Vector3.new(
+				targetRoot.Position.X,
+				Root.Position.Y,
+				targetRoot.Position.Z
+			)
+
+		if (
+			targetPosition -
+			Root.Position
+		).Magnitude > 0.05 then
+
+			Root.CFrame =
+				CFrame.lookAt(
+					Root.Position,
+					targetPosition
+				)
+		end
+	end
+)
+
+--==================================================
+-- AUTO PLAY
+--==================================================
+
+PageTitle(
+	AutoPlayPage,
+	"AUTO PLAY AI"
+)
+
+local AIButton =
+	CreateButton(
+		AutoPlayPage,
+		"AI AUTO PLAY : OFF",
+		45
+	)
+
+local AITargetButton =
+	CreateButton(
+		AutoPlayPage,
+		"AI TARGET: AUTO",
+		85
+	)
+
+local AIWeaponButton =
+	CreateButton(
+		AutoPlayPage,
+		"AUTO WEAPON : OFF",
+		125
+	)
+
+local AIStatus =
+	Instance.new(
+		"TextLabel"
+	)
+
+AIStatus.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		160
+	)
+
+AIStatus.Position =
+	UDim2.fromOffset(
+		10,
+		170
+	)
+
+AIStatus.BackgroundTransparency = 1
+
+AIStatus.Text =
+	"AI STATUS: READY\n\n" ..
+	"Target: AUTO\n" ..
+	"Movement: Pathfinding\n" ..
+	"Obstacle Avoidance: ON\n" ..
+	"Raycast: ON\n" ..
+	"Weapon: OFF"
+
+AIStatus.TextColor3 =
+	Color3.fromRGB(
+		190,
+		190,
+		190
+	)
+
+AIStatus.Font =
+	Enum.Font.Gotham
+
+AIStatus.TextSize = 11
+AIStatus.TextWrapped = true
+
+AIStatus.TextXAlignment =
+	Enum.TextXAlignment.Left
+
+AIStatus.TextYAlignment =
+	Enum.TextYAlignment.Top
+
+AIStatus.Parent =
+	AutoPlayPage
+
+AIButton.MouseButton1Click:Connect(
+	function()
+
+		AI_AUTO_PLAY =
+			not AI_AUTO_PLAY
+
+		AIButton.Text =
+			AI_AUTO_PLAY and
+			"AI AUTO PLAY : ON" or
+			"AI AUTO PLAY : OFF"
+
+		AIButton.BackgroundColor3 =
+			AI_AUTO_PLAY and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+
+		if not AI_AUTO_PLAY then
+
+			AI_LAST_TARGET = nil
+			AI_WAYPOINTS = {}
+			AI_WAYPOINT_INDEX = 1
+		end
+	end
+)
+
+AITargetButton.MouseButton1Click:Connect(
+	function()
+
+		if AI_TARGET_MODE ==
+			"AUTO" then
+
+			AI_TARGET_MODE =
+				"RESOURCE"
+
+		elseif AI_TARGET_MODE ==
+			"RESOURCE" then
+
+			AI_TARGET_MODE =
+				"PLAYER"
+
+		else
+
+			AI_TARGET_MODE =
+				"AUTO"
+		end
+
+		AITargetButton.Text =
+			"AI TARGET: " ..
+			AI_TARGET_MODE
+	end
+)
+
+AIWeaponButton.MouseButton1Click:Connect(
+	function()
+
+		AI_WEAPON =
+			not AI_WEAPON
+
+		AIWeaponButton.Text =
+			AI_WEAPON and
+			"AUTO WEAPON : ON" or
+			"AUTO WEAPON : OFF"
+
+		AIWeaponButton.BackgroundColor3 =
+			AI_WEAPON and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+	end
+)
+
+--==================================================
+-- SPEED
+--==================================================
+
+PageTitle(
+	SpeedPage,
+	"SPEED"
+)
+
+local SpeedButton =
+	CreateButton(
+		SpeedPage,
+		"SPEED : OFF",
+		45
+	)
+
+local SpeedInfo =
+	Instance.new(
+		"TextLabel"
+	)
+
+SpeedInfo.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		55
+	)
+
+SpeedInfo.Position =
+	UDim2.fromOffset(
+		10,
+		85
+	)
+
+SpeedInfo.BackgroundTransparency = 1
+
+SpeedInfo.Text =
+	"Di chuyển liên tục về phía trước\n" ..
+	"Khoảng cách mỗi bước: 1 - 10 studs\n" ..
+	"Nút nhỏ bật / tắt SPEED"
+
+SpeedInfo.TextColor3 =
+	Color3.fromRGB(
+		190,
+		190,
+		190
+	)
+
+SpeedInfo.Font =
+	Enum.Font.Gotham
+
+SpeedInfo.TextSize = 10
+
+SpeedInfo.TextXAlignment =
+	Enum.TextXAlignment.Left
+
+SpeedInfo.TextYAlignment =
+	Enum.TextYAlignment.Top
+
+SpeedInfo.Parent =
+	SpeedPage
+
+local SpeedDistanceLabel =
+	Instance.new(
+		"TextLabel"
+	)
+
+SpeedDistanceLabel.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		20
+	)
+
+SpeedDistanceLabel.Position =
+	UDim2.fromOffset(
+		10,
+		150
+	)
+
+SpeedDistanceLabel.BackgroundTransparency = 1
+
+SpeedDistanceLabel.Text =
+	"SPEED DISTANCE: 2"
+
+SpeedDistanceLabel.TextColor3 =
+	Color3.fromRGB(
+		210,
+		210,
+		210
+	)
+
+SpeedDistanceLabel.Font =
+	Enum.Font.GothamBold
+
+SpeedDistanceLabel.TextSize = 11
+
+SpeedDistanceLabel.Parent =
+	SpeedPage
+
+local SpeedSlider =
+	Instance.new(
+		"Frame"
+	)
+
+SpeedSlider.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		16
+	)
+
+SpeedSlider.Position =
+	UDim2.fromOffset(
+		10,
+		178
+	)
+
+SpeedSlider.BackgroundColor3 =
+	Color3.fromRGB(
+		55,
+		55,
+		55
+	)
+
+SpeedSlider.BorderSizePixel = 0
+SpeedSlider.Active = true
+
+SpeedSlider.Parent =
+	SpeedPage
+
+local SpeedSliderCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+SpeedSliderCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+SpeedSliderCorner.Parent =
+	SpeedSlider
+
+local SpeedKnob =
+	Instance.new(
+		"Frame"
+	)
+
+SpeedKnob.Size =
+	UDim2.fromOffset(
+		16,
+		16
+	)
+
+SpeedKnob.Position =
+	UDim2.new(
+		(
+			SPEED_DISTANCE -
+			SPEED_MIN
+		) /
+		(
+			SPEED_MAX -
+			SPEED_MIN
+		),
+		-8,
+		0,
+		0
+	)
+
+SpeedKnob.BackgroundColor3 =
+	Color3.fromRGB(
+		0,
+		170,
+		255
+	)
+
+SpeedKnob.BorderSizePixel = 0
+
+SpeedKnob.Parent =
+	SpeedSlider
+
+local SpeedKnobCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+SpeedKnobCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+SpeedKnobCorner.Parent =
+	SpeedKnob
+
+local function SetSpeedDistance(
+	x
+)
+
+	local left =
+		SpeedSlider.AbsolutePosition.X
+
+	local width =
+		SpeedSlider.AbsoluteSize.X
+
+	if width <= 0 then
+		return
+	end
+
+	local scale =
+		math.clamp(
+			(x - left) / width,
+			0,
+			1
+		)
+
+	SPEED_DISTANCE =
+		math.floor(
+			SPEED_MIN +
+			(
+				SPEED_MAX -
+				SPEED_MIN
+			) *
+			scale +
+			0.5
+		)
+
+	local knobScale =
+		(
+			SPEED_DISTANCE -
+			SPEED_MIN
+		) /
+		(
+			SPEED_MAX -
+			SPEED_MIN
+		)
+
+	SpeedKnob.Position =
+		UDim2.new(
+			knobScale,
+			-8,
+			0,
+			0
+		)
+
+	SpeedDistanceLabel.Text =
+		"SPEED DISTANCE: " ..
+		SPEED_DISTANCE
+end
+
+SpeedSlider.InputBegan:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			speedDragging = true
+
+			SetSpeedDistance(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputChanged:Connect(
+	function(input)
+
+		if not speedDragging then
+			return
+		end
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseMovement
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			SetSpeedDistance(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputEnded:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			speedDragging = false
+		end
+	end
+)
+
+local SmallSpeed =
+	Instance.new(
+		"TextButton"
+	)
+
+SmallSpeed.Name =
+	"SpeedSmallButton"
+
+SmallSpeed.Size =
+	UDim2.fromOffset(
+		58,
+		58
+	)
+
+SmallSpeed.Position =
+	UDim2.new(
+		0.5,
+		-29,
+		0.60,
+		0
+	)
+
+SmallSpeed.BackgroundColor3 =
+	Color3.fromRGB(
+		50,
+		50,
+		50
+	)
+
+SmallSpeed.Text =
+	"SPEED\nOFF"
+
+SmallSpeed.TextColor3 =
+	Color3.new(
+		1,
+		1,
+		1
+	)
+
+SmallSpeed.TextSize = 11
+
+SmallSpeed.Font =
+	Enum.Font.GothamBold
+
+SmallSpeed.BorderSizePixel = 0
+SmallSpeed.Active = true
+
+SmallSpeed.Visible = true
+SmallSpeed.ZIndex = 1000
+
+SmallSpeed.Parent =
+	Gui
+
+local SmallSpeedCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+SmallSpeedCorner.CornerRadius =
+	UDim.new(
+		0,
+		14
+	)
+
+SmallSpeedCorner.Parent =
+	SmallSpeed
+
+local function SetSpeed(
+	value
+)
+
+	SPEED = value
+
+	SpeedButton.Text =
+		SPEED and
+		"SPEED : ON" or
+		"SPEED : OFF"
+
+	SpeedButton.BackgroundColor3 =
+		SPEED and
+		Color3.fromRGB(
+			40,
+			180,
+			40
+		) or
+		Color3.fromRGB(
+			50,
+			50,
+			50
+		)
+
+	SmallSpeed.Text =
+		SPEED and
+		"SPEED\nON" or
+		"SPEED\nOFF"
+
+	SmallSpeed.BackgroundColor3 =
+		SPEED and
+		Color3.fromRGB(
+			0,
+			170,
+			255
+		) or
+		Color3.fromRGB(
+			50,
+			50,
+			50
+		)
+end
+
+SpeedButton.MouseButton1Click:Connect(
+	function()
+		SetSpeed(
+			not SPEED
+		)
+	end
+)
+
+SmallSpeed.MouseButton1Click:Connect(
+	function()
+		SetSpeed(
+			not SPEED
+		)
+	end
+)
+
+--==================================================
+-- SPEED LOOP
+--==================================================
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			if SPEED
+				and Root
+				and Root.Parent then
+
+				local direction =
+					Root.CFrame.LookVector
+
+				local horizontal =
+					Vector3.new(
+						direction.X,
+						0,
+						direction.Z
+					)
+
+				if horizontal.Magnitude >
+					0.001 then
+
+					horizontal =
+						horizontal.Unit
+
+					Root.CFrame =
+						Root.CFrame +
+						horizontal *
+						SPEED_DISTANCE
+				end
+			end
+
+			task.wait(
+				SPEED_INTERVAL
+			)
+		end
+	end
+)
+
+--==================================================
+-- AURA
+--==================================================
+
+PageTitle(
+	AuraPage,
+	"AURA"
+)
+
+local AuraButton =
+	CreateButton(
+		AuraPage,
+		"AURA TELEPORT : OFF",
+		45
+	)
+
+local AuraDistanceLabel =
+	Instance.new(
+		"TextLabel"
+	)
+
+AuraDistanceLabel.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		20
+	)
+
+AuraDistanceLabel.Position =
+	UDim2.fromOffset(
+		10,
+		95
+	)
+
+AuraDistanceLabel.BackgroundTransparency = 1
+
+AuraDistanceLabel.Text =
+	"AURA DISTANCE: 12"
+
+AuraDistanceLabel.TextColor3 =
+	Color3.fromRGB(
+		210,
+		210,
+		210
+	)
+
+AuraDistanceLabel.Font =
+	Enum.Font.GothamBold
+
+AuraDistanceLabel.TextSize = 11
+
+AuraDistanceLabel.Parent =
+	AuraPage
+
+local AuraDistanceSlider =
+	Instance.new(
+		"Frame"
+	)
+
+AuraDistanceSlider.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		16
+	)
+
+AuraDistanceSlider.Position =
+	UDim2.fromOffset(
+		10,
+		120
+	)
+
+AuraDistanceSlider.BackgroundColor3 =
+	Color3.fromRGB(
+		55,
+		55,
+		55
+	)
+
+AuraDistanceSlider.BorderSizePixel = 0
+AuraDistanceSlider.Active = true
+
+AuraDistanceSlider.Parent =
+	AuraPage
+
+local AuraDistanceCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+AuraDistanceCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+AuraDistanceCorner.Parent =
+	AuraDistanceSlider
+
+local AuraDistanceKnob =
+	Instance.new(
+		"Frame"
+	)
+
+AuraDistanceKnob.Size =
+	UDim2.fromOffset(
+		16,
+		16
+	)
+
+AuraDistanceKnob.Position =
+	UDim2.new(
+		(
+			AURA_DISTANCE -
+			AURA_MIN_DISTANCE
+		) /
+		(
+			AURA_MAX_DISTANCE -
+			AURA_MIN_DISTANCE
+		),
+		-8,
+		0,
+		0
+	)
+
+AuraDistanceKnob.BackgroundColor3 =
+	Color3.fromRGB(
+		0,
+		170,
+		255
+	)
+
+AuraDistanceKnob.BorderSizePixel = 0
+
+AuraDistanceKnob.Parent =
+	AuraDistanceSlider
+
+local AuraDistanceKnobCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+AuraDistanceKnobCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+AuraDistanceKnobCorner.Parent =
+	AuraDistanceKnob
+
+local function SetAuraDistance(
+	x
+)
+
+	local left =
+		AuraDistanceSlider.AbsolutePosition.X
+
+	local width =
+		AuraDistanceSlider.AbsoluteSize.X
+
+	if width <= 0 then
+		return
+	end
+
+	local scale =
+		math.clamp(
+			(x - left) / width,
+			0,
+			1
+		)
+
+	AURA_DISTANCE =
+		math.floor(
+			AURA_MIN_DISTANCE +
+			(
+				AURA_MAX_DISTANCE -
+				AURA_MIN_DISTANCE
+			) *
+			scale +
+			0.5
+		)
+
+	local knobScale =
+		(
+			AURA_DISTANCE -
+			AURA_MIN_DISTANCE
+		) /
+		(
+			AURA_MAX_DISTANCE -
+			AURA_MIN_DISTANCE
+		)
+
+	AuraDistanceKnob.Position =
+		UDim2.new(
+			knobScale,
+			-8,
+			0,
+			0
+		)
+
+	AuraDistanceLabel.Text =
+		"AURA DISTANCE: " ..
+		AURA_DISTANCE
+end
+
+AuraDistanceSlider.InputBegan:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			auraDistanceDragging = true
+
+			SetAuraDistance(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputChanged:Connect(
+	function(input)
+
+		if not auraDistanceDragging then
+			return
+		end
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseMovement
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			SetAuraDistance(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputEnded:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			auraDistanceDragging = false
+		end
+	end
+)
+
+local AuraIntervalLabel =
+	Instance.new(
+		"TextLabel"
+	)
+
+AuraIntervalLabel.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		20
+	)
+
+AuraIntervalLabel.Position =
+	UDim2.fromOffset(
+		10,
+		160
+	)
+
+AuraIntervalLabel.BackgroundTransparency = 1
+
+AuraIntervalLabel.Text =
+	"AURA INTERVAL: 0.3S"
+
+AuraIntervalLabel.TextColor3 =
+	Color3.fromRGB(
+		210,
+		210,
+		210
+	)
+
+AuraIntervalLabel.Font =
+	Enum.Font.GothamBold
+
+AuraIntervalLabel.TextSize = 11
+
+AuraIntervalLabel.Parent =
+	AuraPage
+
+local AuraIntervalSlider =
+	Instance.new(
+		"Frame"
+	)
+
+AuraIntervalSlider.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		16
+	)
+
+AuraIntervalSlider.Position =
+	UDim2.fromOffset(
+		10,
+		185
+	)
+
+AuraIntervalSlider.BackgroundColor3 =
+	Color3.fromRGB(
+		55,
+		55,
+		55
+	)
+
+AuraIntervalSlider.BorderSizePixel = 0
+AuraIntervalSlider.Active = true
+
+AuraIntervalSlider.Parent =
+	AuraPage
+
+local AuraIntervalCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+AuraIntervalCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+AuraIntervalCorner.Parent =
+	AuraIntervalSlider
+
+local AuraIntervalKnob =
+	Instance.new(
+		"Frame"
+	)
+
+AuraIntervalKnob.Size =
+	UDim2.fromOffset(
+		16,
+		16
+	)
+
+AuraIntervalKnob.Position =
+	UDim2.new(
+		(
+			AURA_INTERVAL -
+			AURA_MIN_INTERVAL
+		) /
+		(
+			AURA_MAX_INTERVAL -
+			AURA_MIN_INTERVAL
+		),
+		-8,
+		0,
+		0
+	)
+
+AuraIntervalKnob.BackgroundColor3 =
+	Color3.fromRGB(
+		0,
+		170,
+		255
+	)
+
+AuraIntervalKnob.BorderSizePixel = 0
+
+AuraIntervalKnob.Parent =
+	AuraIntervalSlider
+
+local AuraIntervalKnobCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+AuraIntervalKnobCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+AuraIntervalKnobCorner.Parent =
+	AuraIntervalKnob
+
+local function SetAuraInterval(
+	x
+)
+
+	local left =
+		AuraIntervalSlider.AbsolutePosition.X
+
+	local width =
+		AuraIntervalSlider.AbsoluteSize.X
+
+	if width <= 0 then
+		return
+	end
+
+	local scale =
+		math.clamp(
+			(x - left) / width,
+			0,
+			1
+		)
+
+	AURA_INTERVAL =
+		math.floor(
+			(
+				AURA_MIN_INTERVAL +
+				(
+					AURA_MAX_INTERVAL -
+					AURA_MIN_INTERVAL
+				) *
+				scale
+			) * 10 + 0.5
+		) / 10
+
+	local knobScale =
+		(
+			AURA_INTERVAL -
+			AURA_MIN_INTERVAL
+		) /
+		(
+			AURA_MAX_INTERVAL -
+			AURA_MIN_INTERVAL
+		)
+
+	AuraIntervalKnob.Position =
+		UDim2.new(
+			knobScale,
+			-8,
+			0,
+			0
+		)
+
+	AuraIntervalLabel.Text =
+		"AURA INTERVAL: " ..
+		string.format(
+			"%.1f",
+			AURA_INTERVAL
+		) ..
+		"S"
+end
+
+AuraIntervalSlider.InputBegan:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			auraIntervalDragging = true
+
+			SetAuraInterval(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputChanged:Connect(
+	function(input)
+
+		if not auraIntervalDragging then
+			return
+		end
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseMovement
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			SetAuraInterval(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputEnded:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			auraIntervalDragging = false
+		end
+	end
+)
+
+AuraButton.MouseButton1Click:Connect(
+	function()
+
+		AURA_TELEPORT =
+			not AURA_TELEPORT
+
+		AuraButton.Text =
+			AURA_TELEPORT and
+			"AURA TELEPORT : ON" or
+			"AURA TELEPORT : OFF"
+
+		AuraButton.BackgroundColor3 =
+			AURA_TELEPORT and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+	end
+)
+
+--==================================================
+-- TẦM NHÌN PAGE
+--==================================================
+
+PageTitle(
+	ViewPage,
+	"TẦM NHÌN"
+)
+
+local ViewMoveButton =
+	CreateButton(
+		ViewPage,
+		"DỊCH CHUYỂN LÊN : OFF",
+		45
+	)
+
+local ViewInfo =
+	Instance.new(
+		"TextLabel"
+	)
+
+ViewInfo.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		55
+	)
+
+ViewInfo.Position =
+	UDim2.fromOffset(
+		10,
+		85
+	)
+
+ViewInfo.BackgroundTransparency = 1
+
+ViewInfo.Text =
+	"Khoảng cách: khoảng cách dịch chuyển mỗi lần\n" ..
+	"Delay: thời gian chờ giữa mỗi lần dịch chuyển"
+
+ViewInfo.TextColor3 =
+	Color3.fromRGB(
+		190,
+		190,
+		190
+	)
+
+ViewInfo.Font =
+	Enum.Font.Gotham
+
+ViewInfo.TextSize = 10
+
+ViewInfo.TextWrapped = true
+
+ViewInfo.TextXAlignment =
+	Enum.TextXAlignment.Left
+
+ViewInfo.TextYAlignment =
+	Enum.TextYAlignment.Top
+
+ViewInfo.Parent =
+	ViewPage
+
+--==================================================
+-- VIEW DISTANCE
+--==================================================
+
+local ViewDistanceLabel =
+	Instance.new(
+		"TextLabel"
+	)
+
+ViewDistanceLabel.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		20
+	)
+
+ViewDistanceLabel.Position =
+	UDim2.fromOffset(
+		10,
+		145
+	)
+
+ViewDistanceLabel.BackgroundTransparency = 1
+
+ViewDistanceLabel.Text =
+	"KHOẢNG CÁCH MỖI LẦN: 30M"
+
+ViewDistanceLabel.TextColor3 =
+	Color3.fromRGB(
+		210,
+		210,
+		210
+	)
+
+ViewDistanceLabel.Font =
+	Enum.Font.GothamBold
+
+ViewDistanceLabel.TextSize = 11
+
+ViewDistanceLabel.TextXAlignment =
+	Enum.TextXAlignment.Left
+
+ViewDistanceLabel.Parent =
+	ViewPage
+
+local ViewDistanceSlider =
+	Instance.new(
+		"Frame"
+	)
+
+ViewDistanceSlider.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		16
+	)
+
+ViewDistanceSlider.Position =
+	UDim2.fromOffset(
+		10,
+		170
+	)
+
+ViewDistanceSlider.BackgroundColor3 =
+	Color3.fromRGB(
+		55,
+		55,
+		55
+	)
+
+ViewDistanceSlider.BorderSizePixel = 0
+ViewDistanceSlider.Active = true
+
+ViewDistanceSlider.Parent =
+	ViewPage
+
+local ViewDistanceCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+ViewDistanceCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+ViewDistanceCorner.Parent =
+	ViewDistanceSlider
+
+local ViewDistanceKnob =
+	Instance.new(
+		"Frame"
+	)
+
+ViewDistanceKnob.Size =
+	UDim2.fromOffset(
+		16,
+		16
+	)
+
+ViewDistanceKnob.Position =
+	UDim2.new(
+		1,
+		-8,
+		0,
+		0
+	)
+
+ViewDistanceKnob.BackgroundColor3 =
+	Color3.fromRGB(
+		0,
+		170,
+		255
+	)
+
+ViewDistanceKnob.BorderSizePixel = 0
+
+ViewDistanceKnob.Parent =
+	ViewDistanceSlider
+
+local ViewDistanceKnobCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+ViewDistanceKnobCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+ViewDistanceKnobCorner.Parent =
+	ViewDistanceKnob
+
+local function SetViewDistance(
+	x
+)
+
+	local left =
+		ViewDistanceSlider.AbsolutePosition.X
+
+	local width =
+		ViewDistanceSlider.AbsoluteSize.X
+
+	if width <= 0 then
+		return
+	end
+
+	local scale =
+		math.clamp(
+			(x - left) / width,
+			0,
+			1
+		)
+
+	VIEW_DISTANCE =
+		math.floor(
+			VIEW_DISTANCE_MIN +
+			(
+				VIEW_DISTANCE_MAX -
+				VIEW_DISTANCE_MIN
+			) *
+			scale +
+			0.5
+		)
+
+	local knobScale =
+		(
+			VIEW_DISTANCE -
+			VIEW_DISTANCE_MIN
+		) /
+		(
+			VIEW_DISTANCE_MAX -
+			VIEW_DISTANCE_MIN
+		)
+
+	ViewDistanceKnob.Position =
+		UDim2.new(
+			knobScale,
+			-8,
+			0,
+			0
+		)
+
+	ViewDistanceLabel.Text =
+		"KHOẢNG CÁCH MỖI LẦN: " ..
+		VIEW_DISTANCE ..
+		"M"
+end
+
+ViewDistanceSlider.InputBegan:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			viewDistanceDragging = true
+
+			SetViewDistance(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputChanged:Connect(
+	function(input)
+
+		if not viewDistanceDragging then
+			return
+		end
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseMovement
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			SetViewDistance(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputEnded:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			viewDistanceDragging = false
+		end
+	end
+)
+
+--==================================================
+-- VIEW DELAY
+--==================================================
+
+local ViewDelayLabel =
+	Instance.new(
+		"TextLabel"
+	)
+
+ViewDelayLabel.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		20
+	)
+
+ViewDelayLabel.Position =
+	UDim2.fromOffset(
+		10,
+		215
+	)
+
+ViewDelayLabel.BackgroundTransparency = 1
+
+ViewDelayLabel.Text =
+	"DELAY: 0.05S"
+
+ViewDelayLabel.TextColor3 =
+	Color3.fromRGB(
+		210,
+		210,
+		210
+	)
+
+ViewDelayLabel.Font =
+	Enum.Font.GothamBold
+
+ViewDelayLabel.TextSize = 11
+
+ViewDelayLabel.TextXAlignment =
+	Enum.TextXAlignment.Left
+
+ViewDelayLabel.Parent =
+	ViewPage
+
+local ViewDelaySlider =
+	Instance.new(
+		"Frame"
+	)
+
+ViewDelaySlider.Size =
+	UDim2.new(
+		1,
+		-20,
+		0,
+		16
+	)
+
+ViewDelaySlider.Position =
+	UDim2.fromOffset(
+		10,
+		240
+	)
+
+ViewDelaySlider.BackgroundColor3 =
+	Color3.fromRGB(
+		55,
+		55,
+		55
+	)
+
+ViewDelaySlider.BorderSizePixel = 0
+ViewDelaySlider.Active = true
+
+ViewDelaySlider.Parent =
+	ViewPage
+
+local ViewDelayCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+ViewDelayCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+ViewDelayCorner.Parent =
+	ViewDelaySlider
+
+local ViewDelayKnob =
+	Instance.new(
+		"Frame"
+	)
+
+ViewDelayKnob.Size =
+	UDim2.fromOffset(
+		16,
+		16
+	)
+
+ViewDelayKnob.Position =
+	UDim2.new(
+		0,
+		-8,
+		0,
+		0
+	)
+
+ViewDelayKnob.BackgroundColor3 =
+	Color3.fromRGB(
+		0,
+		170,
+		255
+	)
+
+ViewDelayKnob.BorderSizePixel = 0
+
+ViewDelayKnob.Parent =
+	ViewDelaySlider
+
+local ViewDelayKnobCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+ViewDelayKnobCorner.CornerRadius =
+	UDim.new(
+		0,
+		8
+	)
+
+ViewDelayKnobCorner.Parent =
+	ViewDelayKnob
+
+local function SetViewDelay(
+	x
+)
+
+	local left =
+		ViewDelaySlider.AbsolutePosition.X
+
+	local width =
+		ViewDelaySlider.AbsoluteSize.X
+
+	if width <= 0 then
+		return
+	end
+
+	local scale =
+		math.clamp(
+			(x - left) / width,
+			0,
+			1
+		)
+
+	VIEW_DELAY =
+		VIEW_DELAY_MIN +
+		(
+			VIEW_DELAY_MAX -
+			VIEW_DELAY_MIN
+		) *
+		scale
+
+	-- Làm tròn để dễ chỉnh
+	VIEW_DELAY =
+		math.floor(
+			VIEW_DELAY *
+			100 +
+			0.5
+		) / 100
+
+	local knobScale =
+		(
+			VIEW_DELAY -
+			VIEW_DELAY_MIN
+		) /
+		(
+			VIEW_DELAY_MAX -
+			VIEW_DELAY_MIN
+		)
+
+	ViewDelayKnob.Position =
+		UDim2.new(
+			knobScale,
+			-8,
+			0,
+			0
+		)
+
+	ViewDelayLabel.Text =
+		"DELAY: " ..
+		string.format(
+			"%.2f",
+			VIEW_DELAY
+		) ..
+		"S"
+end
+
+ViewDelaySlider.InputBegan:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			viewDelayDragging = true
+
+			SetViewDelay(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputChanged:Connect(
+	function(input)
+
+		if not viewDelayDragging then
+			return
+		end
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseMovement
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			SetViewDelay(
+				input.Position.X
+			)
+		end
+	end
+)
+
+UIS.InputEnded:Connect(
+	function(input)
+
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType ==
+			Enum.UserInputType.Touch then
+
+			viewDelayDragging = false
+		end
+	end
+)
+
+--==================================================
+-- MOVE UP TOGGLE
+--==================================================
+
+ViewMoveButton.MouseButton1Click:Connect(
+	function()
+
+		VIEW_MOVE =
+			not VIEW_MOVE
+
+		ViewMoveButton.Text =
+			VIEW_MOVE and
+			"DỊCH CHUYỂN LÊN : ON" or
+			"DỊCH CHUYỂN LÊN : OFF"
+
+		ViewMoveButton.BackgroundColor3 =
+			VIEW_MOVE and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+	end
+)
+
+--==================================================
+-- DỊCH CHUYỂN LÊN LOOP
+--==================================================
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			if VIEW_MOVE
+				and Root
+				and Root.Parent then
+
+				local char =
+					LP.Character
+
+				local humanoid =
+					char and
+					char:FindFirstChildOfClass(
+						"Humanoid"
+					)
+
+				if humanoid
+					and humanoid.Health > 0 then
+
+					Root.CFrame =
+						Root.CFrame +
+						Vector3.new(
+							0,
+							VIEW_DISTANCE,
+							0
+						)
+				end
+			end
+
+			task.wait(
+				VIEW_DELAY
+			)
+		end
+	end
+)
+
+--==================================================
+-- RESOURCE FUNCTIONS
+--==================================================
+
+local function GetRoot(obj)
+
+	if obj:IsA("BasePart") then
+		return obj
+	end
+
+	if obj:IsA("Model") then
+
+		return obj.PrimaryPart
+			or
+			obj:FindFirstChildWhichIsA(
+				"BasePart",
+				true
+			)
+	end
+end
+
+local function GetType(obj)
+
+	local n =
+		obj.Name:lower()
+
+	if n:find("wood")
+		or n:find("tree")
+		or n:find("log") then
+
+		return "Wood"
+	end
+
+	if n:find("stone")
+		or n:find("rock")
+		or n:find("ore") then
+
+		return "Stone"
+	end
+
+	if n:find("apple") then
+		return "Apple"
+	end
+
+	if n:find("food")
+		or n:find("meat")
+		or n:find("berry")
+		or n:find("fish") then
+
+		return "Food"
+	end
+end
+
+local function ScanResources()
+
+	local NewCache = {
+		Wood = {},
+		Stone = {},
+		Apple = {},
+		Food = {}
+	}
+
+	for _,obj in ipairs(
+		workspace:GetDescendants()
+	) do
+
+		if obj:IsA("BasePart")
+			or obj:IsA("Model") then
+
+			local t =
+				GetType(obj)
+
+			local r =
+				t and
+				GetRoot(obj)
+
+			if t and r then
+
+				table.insert(
+					NewCache[t],
+					{
+						Root = r,
+						Type = t,
+						Name = t
+					}
+				)
+			end
+		end
+	end
+
+	Cache =
+		NewCache
+end
+
+--==================================================
+-- PLAYER CACHE
+--==================================================
+
+local function ScanPlayers()
+
+	if not Root then
+
+		PlayersCache = {}
+
+		return
+	end
+
+	local list = {}
+
+	for _,p in ipairs(
+		Players:GetPlayers()
+	) do
+
+		if p ~= LP then
+
+			local c =
+				p.Character
+
+			local r =
+				c and
+				c:FindFirstChild(
+					"HumanoidRootPart"
+				)
+
+			local h =
+				c and
+				c:FindFirstChildOfClass(
+					"Humanoid"
+				)
+
+			if r and h
+				and h.Health > 0 then
+
+				table.insert(
+					list,
+					{
+						Player = p,
+						Root = r,
+						Type = "Player",
+						Name = p.DisplayName,
+						Distance =
+							(
+								Root.Position -
+								r.Position
+							).Magnitude
+					}
+				)
+			end
+		end
+	end
+
+	table.sort(
+		list,
+		function(a,b)
+			return a.Distance <
+				b.Distance
+		end
+	)
+
+	PlayersCache = {}
+
+	for i = 1,
+		math.min(
+			MAX_PLAYER,
+			#list
+		) do
+
+		PlayersCache[i] =
+			list[i]
+	end
+end
+
+--==================================================
+-- FARM TARGET
+--==================================================
+
+local function GetFarmTarget()
+
+	if not Root then
+		return nil
+	end
+
+	if FARM_TYPE ==
+		"Player" then
+
+		local best
+		local bestDistance =
+			math.huge
+
+		for _,data in ipairs(
+			PlayersCache
+		) do
+
+			if data.Root
+				and data.Root.Parent then
+
+				local d =
+					(
+						Root.Position -
+						data.Root.Position
+					).Magnitude
+
+				if d < bestDistance then
+
+					bestDistance = d
+					best = data
+				end
+			end
+		end
+
+		return best
+	end
+
+	local best
+	local bestDistance =
+		math.huge
+
+	for _,data in ipairs(
+		Cache[FARM_TYPE] or {}
+	) do
+
+		if data.Root
+			and data.Root.Parent then
+
+			local d =
+				(
+					Root.Position -
+					data.Root.Position
+				).Magnitude
+
+			if d < bestDistance then
+
+				bestDistance = d
+				best = data
+			end
+		end
+	end
+
+	return best
+end
+
+--==================================================
+-- AI TARGET
+--==================================================
+
+local function GetNearestResource()
+
+	if not Root then
+		return nil
+	end
+
+	local best
+	local bestDistance =
+		math.huge
+
+	for resourceType,list in pairs(
+		Cache
+	) do
+
+		for _,data in ipairs(list) do
+
+			if data.Root
+				and data.Root.Parent then
+
+				local d =
+					(
+						Root.Position -
+						data.Root.Position
+					).Magnitude
+
+				if d < bestDistance then
+
+					bestDistance = d
+
+					best =
+						{
+							Root = data.Root,
+							Type = resourceType,
+							Name = resourceType,
+							Distance = d
+						}
+				end
+			end
+		end
+	end
+
+	return best
+end
+
+local function GetNearestAIPlayer()
+
+	if not Root then
+		return nil
+	end
+
+	local best
+	local bestDistance =
+		math.huge
+
+	for _,data in ipairs(
+		PlayersCache
+	) do
+
+		if data.Root
+			and data.Root.Parent then
+
+			local d =
+				(
+					Root.Position -
+					data.Root.Position
+				).Magnitude
+
+			if d < bestDistance then
+
+				bestDistance = d
+				best = data
+			end
+		end
+	end
+
+	return best
+end
+
+local function GetAITarget()
+
+	if AI_TARGET_MODE ==
+		"RESOURCE" then
+
+		return GetNearestResource()
+	end
+
+	if AI_TARGET_MODE ==
+		"PLAYER" then
+
+		return GetNearestAIPlayer()
+	end
+
+	local resource =
+		GetNearestResource()
+
+	local player =
+		GetNearestAIPlayer()
+
+	if not resource then
+		return player
+	end
+
+	if not player then
+		return resource
+	end
+
+	if resource.Distance <=
+		player.Distance then
+
+		return resource
+	end
+
+	return player
+end
+
+--==================================================
+-- RAYCAST
+--==================================================
+
+local function IsObstacleAhead(
+	targetPosition
+)
+
+	if not Root then
+		return false
+	end
+
+	local direction =
+		targetPosition -
+		Root.Position
+
+	if direction.Magnitude <= 2 then
+		return false
+	end
+
+	local params =
+		RaycastParams.new()
+
+	params.FilterType =
+		Enum.RaycastFilterType.Exclude
+
+	params.FilterDescendantsInstances =
+		{
+			Character
+		}
+
+	local result =
+		workspace:Raycast(
+			Root.Position +
+				Vector3.new(
+					0,
+					2,
+					0
+				),
+			direction.Unit *
+				math.min(
+					direction.Magnitude,
+					8
+				),
+			params
+		)
+
+	return result ~= nil
+end
+
+--==================================================
+-- PATHFINDING
+--==================================================
+
+local function ComputeAIPath(
+	targetPosition
+)
+
+	if not Root
+		or not Humanoid then
+
+		return false
+	end
+
+	local path =
+		PathfindingService:CreatePath(
+			{
+				AgentRadius = 2,
+				AgentHeight = 5,
+				AgentCanJump = true,
+				AgentCanClimb = true,
+				WaypointSpacing = 3
+			}
+		)
+
+	local success =
+		pcall(
+			function()
+
+				path:ComputeAsync(
+					Root.Position,
+					targetPosition
+				)
+			end
+		)
+
+	if not success
+		or path.Status ~=
+			Enum.PathStatus.Success then
+
+		AI_WAYPOINTS = {}
+		AI_WAYPOINT_INDEX = 1
+
+		return false
+	end
+
+	AI_WAYPOINTS =
+		path:GetWaypoints()
+
+	AI_WAYPOINT_INDEX = 1
+
+	AI_LAST_PATH =
+		os.clock()
+
+	return #AI_WAYPOINTS > 0
+end
+
+--==================================================
+-- MOVE AI
+--==================================================
+
+local function MoveAI(target)
+
+	if not Humanoid
+		or not Root
+		or not target
+		or not target.Root
+		or not target.Root.Parent then
+
+		return
+	end
+
+	local targetPosition =
+		target.Root.Position
+
+	local distance =
+		(
+			Root.Position -
+			targetPosition
+		).Magnitude
+
+	if distance <=
+		AI_REACH_DISTANCE then
+
+		Humanoid:MoveTo(
+			Root.Position
+		)
+
+		return
+	end
+
+	local needNewPath =
+		AI_LAST_TARGET ~=
+			target.Root
+
+		or
+		#AI_WAYPOINTS == 0
+
+		or
+		AI_WAYPOINT_INDEX >
+			#AI_WAYPOINTS
+
+		or
+		os.clock() -
+			AI_LAST_PATH >
+			AI_PATH_RECOMPUTE
+
+	if needNewPath then
+
+		AI_LAST_TARGET =
+			target.Root
+
+		ComputeAIPath(
+			targetPosition
+		)
+	end
+
+	local waypoint =
+		AI_WAYPOINTS[
+			AI_WAYPOINT_INDEX
+		]
+
+	if waypoint then
+
+		if IsObstacleAhead(
+			waypoint.Position
+		) then
+
+			ComputeAIPath(
+				targetPosition
+			)
+
+			waypoint =
+				AI_WAYPOINTS[
+					AI_WAYPOINT_INDEX
+				]
+		end
+
+		if waypoint then
+
+			if waypoint.Action ==
+				Enum.PathWaypointAction.Jump then
+
+				Humanoid.Jump = true
+			end
+
+			Humanoid:MoveTo(
+				waypoint.Position
+			)
+
+			if (
+				Root.Position -
+				waypoint.Position
+			).Magnitude <= 3 then
+
+				AI_WAYPOINT_INDEX += 1
+			end
+		end
+
+	else
+
+		Humanoid:MoveTo(
+			targetPosition
+		)
+	end
+end
+
+--==================================================
+-- AUTO WEAPON
+--==================================================
+
+local function FindTool()
+
+	if Character then
+
+		for _,obj in ipairs(
+			Character:GetChildren()
+		) do
+
+			if obj:IsA("Tool") then
+				return obj
+			end
+		end
+	end
+
+	local Backpack =
+		LP:FindFirstChildOfClass(
+			"Backpack"
+		)
+
+	if Backpack then
+
+		for _,obj in ipairs(
+			Backpack:GetChildren()
+		) do
+
+			if obj:IsA("Tool") then
+				return obj
+			end
+		end
+	end
+
+	return nil
+end
+
+local function EquipAndUseTool()
+
+	if not AI_WEAPON then
+		return
+	end
+
+	if not Character
+		or not Humanoid then
+
+		return
+	end
+
+	local Tool =
+		FindTool()
+
+	if not Tool then
+		return
+	end
+
+	if Tool.Parent ~=
+		Character then
+
+		pcall(
+			function()
+				Humanoid:EquipTool(
+					Tool
+				)
+			end
+		)
+
+		task.wait(0.05)
+	end
+
+	if Tool.Parent ==
+		Character then
+
+		pcall(
+			function()
+				Tool:Activate()
+			end
+		)
+	end
+end
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			if AI_AUTO_PLAY
+				and AI_WEAPON then
+
+				EquipAndUseTool()
+			end
+
+			task.wait(
+				AI_WEAPON_INTERVAL
+			)
+		end
+	end
+)
+
+--==================================================
+-- AI LOOP
+--==================================================
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			if AI_AUTO_PLAY then
+
+				local char =
+					LP.Character
+
+				Humanoid =
+					char and
+					char:FindFirstChildOfClass(
+						"Humanoid"
+					)
+
+				Root =
+					char and
+					char:FindFirstChild(
+						"HumanoidRootPart"
+					)
+
+				if Humanoid
+					and Root
+					and Humanoid.Health > 0 then
+
+					Humanoid.WalkSpeed =
+						FARM_SPEED
+
+					local target =
+						GetAITarget()
+
+					if target
+						and target.Root
+						and target.Root.Parent then
+
+						MoveAI(target)
+
+						local distance =
+							(
+								Root.Position -
+								target.Root.Position
+							).Magnitude
+
+						AIStatus.Text =
+							"AI STATUS: RUNNING\n\n" ..
+							"Target: " ..
+							(
+								target.Name or
+								"Unknown"
+							) ..
+							"\nDistance: " ..
+							math.floor(
+								distance
+							) ..
+							"\nMovement: Pathfinding\n" ..
+							"Obstacle Avoidance: ON\n" ..
+							"Raycast: ON\n" ..
+							"Weapon: " ..
+							(
+								AI_WEAPON and
+								"ON" or
+								"OFF"
+							)
+
+					else
+
+						AIStatus.Text =
+							"AI STATUS: SEARCHING\n\n" ..
+							"Không tìm thấy mục tiêu\n" ..
+							"Đang quét map..."
+
+						AI_LAST_TARGET = nil
+						AI_WAYPOINTS = {}
+					end
+				end
+
+			else
+
+				AIStatus.Text =
+					"AI STATUS: READY\n\n" ..
+					"Target: " ..
+					AI_TARGET_MODE ..
+					"\nMovement: Pathfinding\n" ..
+					"Obstacle Avoidance: ON\n" ..
+					"Raycast: ON\n" ..
+					"Weapon: " ..
+					(
+						AI_WEAPON and
+						"ON" or
+						"OFF"
+					)
+			end
+
+			task.wait(
+				AI_UPDATE
+			)
+		end
+	end
+)
+
+--==================================================
+-- AUTO FARM
+--==================================================
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			if AUTO_FARM
+				and not AI_AUTO_PLAY then
+
+				if Humanoid
+					and Root then
+
+					Humanoid.WalkSpeed =
+						FARM_SPEED
+
+					local target =
+						GetFarmTarget()
+
+					if target
+						and target.Root then
+
+						Humanoid:MoveTo(
+							target.Root.Position
+						)
+					end
+				end
+			end
+
+			task.wait(0.15)
+		end
+	end
+)
+
+--==================================================
+-- AURA TELEPORT
+--==================================================
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			if AURA_TELEPORT then
+
+				local char =
+					LP.Character
+
+				local root =
+					char and
+					char:FindFirstChild(
+						"HumanoidRootPart"
+					)
+
+				if root then
+
+					local nearestRoot
+					local nearestDistance =
+						AURA_DISTANCE
+
+					for _,player in ipairs(
+						Players:GetPlayers()
+					) do
+
+						if player ~= LP then
+
+							local targetChar =
+								player.Character
+
+							local targetRoot =
+								targetChar and
+								targetChar:FindFirstChild(
+									"HumanoidRootPart"
+								)
+
+							local targetHumanoid =
+								targetChar and
+								targetChar:FindFirstChildOfClass(
+									"Humanoid"
+								)
+
+							if targetRoot
+								and targetHumanoid
+								and targetHumanoid.Health > 0 then
+
+								local distance =
+									(
+										root.Position -
+										targetRoot.Position
+									).Magnitude
+
+								if distance <=
+									nearestDistance then
+
+									nearestDistance =
+										distance
+
+									nearestRoot =
+										targetRoot
+								end
+							end
+						end
+					end
+
+					if nearestRoot then
+
+						root.CFrame =
+							nearestRoot.CFrame
+					end
+				end
+			end
+
+			task.wait(
+				AURA_INTERVAL
+			)
+		end
+	end
+)
+
+--==================================================
+-- POWER
+--==================================================
+
+local function UsePower()
+
+	if not POWER
+		or POWER_COOLDOWN then
+
+		return
+	end
+
+	local char =
+		LP.Character
+
+	local root =
+		char and
+		char:FindFirstChild(
+			"HumanoidRootPart"
+		)
+
+	if not root then
+		return
+	end
+
+	POWER_COOLDOWN = true
+
+	root.CFrame =
+		root.CFrame +
+		root.CFrame.LookVector *
+		POWER_DISTANCE
+
+	task.delay(
+		2,
+		function()
+			POWER_COOLDOWN = false
+		end
+	)
+end
+
+local SmallPower =
+	Instance.new(
+		"TextButton"
+	)
+
+SmallPower.Name =
+	"PowerSmallButton"
+
+SmallPower.Size =
+	UDim2.fromOffset(
+		52,
+		52
+	)
+
+SmallPower.Position =
+	UDim2.new(
+		0.5,
+		-26,
+		0.72,
+		0
+	)
+
+SmallPower.BackgroundColor3 =
+	Color3.fromRGB(
+		0,
+		170,
+		255
+	)
+
+SmallPower.Text = "⚡"
+
+SmallPower.TextColor3 =
+	Color3.new(
+		1,
+		1,
+		1
+	)
+
+SmallPower.TextSize = 24
+
+SmallPower.Font =
+	Enum.Font.GothamBold
+
+SmallPower.BorderSizePixel = 0
+SmallPower.Active = true
+
+SmallPower.Visible = false
+SmallPower.ZIndex = 1000
+
+SmallPower.Parent =
+	Gui
+
+local SmallPowerCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+SmallPowerCorner.CornerRadius =
+	UDim.new(
+		0,
+		13
+	)
+
+SmallPowerCorner.Parent =
+	SmallPower
+
+SmallPower.MouseButton1Click:Connect(
+	UsePower
+)
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			SmallPower.Visible =
+				POWER
+
+			task.wait(0.1)
+		end
+	end
+)
+
+--==================================================
+-- MISC
+--==================================================
+
+PageTitle(
+	MiscPage,
+	"MISC"
+)
+
+local AntiAFKButton =
+	CreateButton(
+		MiscPage,
+		"ANTI AFK : OFF",
+		45
+	)
+
+local BrightButton =
+	CreateButton(
+		MiscPage,
+		"FULL BRIGHT : OFF",
+		85
+	)
+
+local FogButton =
+	CreateButton(
+		MiscPage,
+		"NO FOG : OFF",
+		125
+	)
+
+local WarningButton =
+	CreateButton(
+		MiscPage,
+		"WARNING 200M : OFF",
+		165
+	)
+
+local AntiWaterButton =
+	CreateButton(
+		MiscPage,
+		"ANTI WATER PART : OFF",
+		205
+	)
+
+--==================================================
+-- ANTI WATER
+--==================================================
+
+AntiWaterButton.MouseButton1Click:Connect(
+	function()
+
+		ANTI_WATER =
+			not ANTI_WATER
+
+		AntiWaterButton.Text =
+			ANTI_WATER and
+			"ANTI WATER PART : ON" or
+			"ANTI WATER PART : OFF"
+
+		AntiWaterButton.BackgroundColor3 =
+			ANTI_WATER and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+
+		if ANTI_WATER then
+
+			CreateAntiPart()
+
+		else
+
+			if AntiPart then
+
+				AntiPart:Destroy()
+				AntiPart = nil
+			end
+		end
+	end
+)
+
+--==================================================
+-- ANTI AFK
+--==================================================
+
+AntiAFKButton.MouseButton1Click:Connect(
+	function()
+
+		ANTI_AFK =
+			not ANTI_AFK
+
+		AntiAFKButton.Text =
+			ANTI_AFK and
+			"ANTI AFK : ON" or
+			"ANTI AFK : OFF"
+
+		AntiAFKButton.BackgroundColor3 =
+			ANTI_AFK and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+	end
+)
+
+LP.Idled:Connect(
+	function()
+
+		if ANTI_AFK then
+
+			VirtualUser:CaptureController()
+
+			VirtualUser:ClickButton2(
+				Vector2.new(
+					0,
+					0
+				)
+			)
+		end
+	end
+)
+
+--==================================================
+-- FULL BRIGHT
+--==================================================
+
+local OldBrightness =
+	Lighting.Brightness
+
+local OldClockTime =
+	Lighting.ClockTime
+
+BrightButton.MouseButton1Click:Connect(
+	function()
+
+		FULL_BRIGHT =
+			not FULL_BRIGHT
+
+		if FULL_BRIGHT then
+
+			Lighting.Brightness = 3
+			Lighting.ClockTime = 14
+
+		else
+
+			Lighting.Brightness =
+				OldBrightness
+
+			Lighting.ClockTime =
+				OldClockTime
+		end
+
+		BrightButton.Text =
+			FULL_BRIGHT and
+			"FULL BRIGHT : ON" or
+			"FULL BRIGHT : OFF"
+
+		BrightButton.BackgroundColor3 =
+			FULL_BRIGHT and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+	end
+)
+
+--==================================================
+-- NO FOG
+--==================================================
+
+local OldFogStart =
+	Lighting.FogStart
+
+local OldFogEnd =
+	Lighting.FogEnd
+
+FogButton.MouseButton1Click:Connect(
+	function()
+
+		NO_FOG =
+			not NO_FOG
+
+		if NO_FOG then
+
+			Lighting.FogStart = 0
+			Lighting.FogEnd = 100000
+
+		else
+
+			Lighting.FogStart =
+				OldFogStart
+
+			Lighting.FogEnd =
+				OldFogEnd
+		end
+
+		FogButton.Text =
+			NO_FOG and
+			"NO FOG : ON" or
+			"NO FOG : OFF"
+
+		FogButton.BackgroundColor3 =
+			NO_FOG and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+	end
+)
+
+--==================================================
+-- ESP
+--==================================================
+
+local Pool = {}
+
+local function MakeESP()
+
+	local Line =
+		Instance.new(
+			"Frame"
+		)
+
+	Line.Size =
+		UDim2.fromOffset(
+			0,
+			2
+		)
+
+	Line.AnchorPoint =
+		Vector2.new(
+			0.5,
+			0.5
+		)
+
+	Line.BackgroundColor3 =
+		Color3.new(
+			1,
+			1,
+			1
+		)
+
+	Line.BorderSizePixel = 0
+	Line.Visible = false
+	Line.ZIndex = 20
+
+	Line.Parent =
+		Gui
+
+	local Text =
+		Instance.new(
+			"TextLabel"
+		)
+
+	Text.Size =
+		UDim2.fromOffset(
+			170,
+			35
+		)
+
+	Text.AnchorPoint =
+		Vector2.new(
+			0.5,
+			0.5
+		)
+
+	Text.BackgroundTransparency = 1
+
+	Text.TextColor3 =
+		Color3.new(
+			1,
+			1,
+			1
+		)
+
+	Text.TextStrokeTransparency = 0
+
+	Text.Font =
+		Enum.Font.GothamBold
+
+	Text.TextSize = 13
+
+	Text.Visible = false
+	Text.ZIndex = 21
+
+	Text.Parent =
+		Gui
+
+	return {
+		Line = Line,
+		Text = Text
+	}
+end
+
+local TOTAL =
+	MAX_PLAYER +
+	MAX_RESOURCE * 4
+
+for i = 1,TOTAL do
+	Pool[i] =
+		MakeESP()
+end
+
+local function ESPColor(t)
+
+	if t == "Player" then
+
+		return Color3.fromRGB(
+			0,
+			255,
+			0
+		)
+
+	elseif t == "Wood" then
+
+		return Color3.fromRGB(
+			170,
+			100,
+			40
+		)
+
+	elseif t == "Stone" then
+
+		return Color3.fromRGB(
+			200,
+			200,
+			200
+		)
+
+	elseif t == "Apple" then
+
+		return Color3.fromRGB(
+			255,
+			40,
+			40
+		)
+
+	elseif t == "Food" then
+
+		return Color3.fromRGB(
+			255,
+			180,
+			0
+		)
+	end
+
+	return Color3.new(
+		1,
+		1,
+		1
+	)
+end
+
+local function HideESP()
+
+	for _,e in ipairs(
+		Pool
+	) do
+
+		e.Line.Visible = false
+		e.Text.Visible = false
+	end
+end
+
+RunService.RenderStepped:Connect(
+	function()
+
+		if not ESP then
+
+			HideESP()
+			return
+		end
+
+		local cam =
+			workspace.CurrentCamera
+
+		if not cam
+			or not Root then
+
+			HideESP()
+			return
+		end
+
+		local targets = {}
+
+		for _,d in ipairs(
+			PlayersCache
+		) do
+
+			table.insert(
+				targets,
+				d
+			)
+		end
+
+		for _,list in pairs(
+			Cache
+		) do
+
+			local sorted = {}
+
+			for _,d in ipairs(
+				list
+			) do
+
+				if d.Root
+					and d.Root.Parent then
+
+					d.Distance =
+						(
+							Root.Position -
+							d.Root.Position
+						).Magnitude
+
+					table.insert(
+						sorted,
+						d
+					)
+				end
+			end
+
+			table.sort(
+				sorted,
+				function(a,b)
+
+					return a.Distance <
+						b.Distance
+				end
+			)
+
+			for i = 1,
+				math.min(
+					MAX_RESOURCE,
+					#sorted
+				) do
+
+				table.insert(
+					targets,
+					sorted[i]
+				)
+			end
+		end
+
+		local center =
+			Vector2.new(
+				cam.ViewportSize.X / 2,
+				cam.ViewportSize.Y / 2
+			)
+
+		for i = 1,TOTAL do
+
+			local e =
+				Pool[i]
+
+			local d =
+				targets[i]
+
+			if not d
+				or not d.Root
+				or not d.Root.Parent then
+
+				e.Line.Visible = false
+				e.Text.Visible = false
+
+				continue
+			end
+
+			local distance =
+				(
+					Root.Position -
+					d.Root.Position
+				).Magnitude
+
+			local pos =
+				cam:WorldToViewportPoint(
+					d.Root.Position
+				)
+
+			if pos.Z <= 0 then
+
+				e.Line.Visible = false
+				e.Text.Visible = false
+
+				continue
+			end
+
+			local target =
+				Vector2.new(
+					pos.X,
+					pos.Y
+				)
+
+			local diff =
+				target -
+				center
+
+			local len =
+				diff.Magnitude
+
+			if len > 1 then
+
+				e.Line.Position =
+					UDim2.fromOffset(
+						(
+							center.X +
+							target.X
+						) / 2,
+						(
+							center.Y +
+							target.Y
+						) / 2
+					)
+
+				e.Line.Size =
+					UDim2.fromOffset(
+						len,
+						2
+					)
+
+				e.Line.Rotation =
+					math.deg(
+						math.atan2(
+							diff.Y,
+							diff.X
+						)
+					)
+
+				e.Line.BackgroundColor3 =
+					ESPColor(
+						d.Type
+					)
+
+				e.Line.Visible = true
+			end
+
+			e.Text.Position =
+				UDim2.fromOffset(
+					math.clamp(
+						target.X,
+						45,
+						cam.ViewportSize.X -
+							45
+					),
+					math.clamp(
+						target.Y - 25,
+						20,
+						cam.ViewportSize.Y -
+							20
+					)
+				)
+
+			e.Text.TextColor3 =
+				ESPColor(
+					d.Type
+				)
+
+			e.Text.Text =
+				d.Name ..
+				"\n" ..
+				math.floor(
+					d.Distance or 0
+				) ..
+				" m"
+
+			e.Text.Visible = true
+		end
+	end
+)
+
+--==================================================
+-- WARNING
+--==================================================
+
+local WarningLabel =
+	Instance.new(
+		"TextLabel"
+	)
+
+WarningLabel.Size =
+	UDim2.fromOffset(
+		300,
+		45
+	)
+
+WarningLabel.Position =
+	UDim2.new(
+		0.5,
+		-150,
+		0.12,
+		0
+	)
+
+WarningLabel.BackgroundColor3 =
+	Color3.fromRGB(
+		180,
+		50,
+		50
+	)
+
+WarningLabel.BackgroundTransparency =
+	0.15
+
+WarningLabel.TextColor3 =
+	Color3.new(
+		1,
+		1,
+		1
+	)
+
+WarningLabel.Font =
+	Enum.Font.GothamBold
+
+WarningLabel.TextSize = 13
+
+WarningLabel.Text =
+	"⚠ KHÔNG CÓ NGƯỜI GẦN"
+
+WarningLabel.Visible = false
+WarningLabel.ZIndex = 400
+
+WarningLabel.Parent =
+	Gui
+
+local WarningCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+WarningCorner.CornerRadius =
+	UDim.new(
+		0,
+		10
+	)
+
+WarningCorner.Parent =
+	WarningLabel
+
+local function CheckNearbyPlayers()
+
+	if not WARNING then
+
+		WarningLabel.Visible = false
+		return
+	end
+
+	if not Root then
+		return
+	end
+
+	local nearestPlayer
+	local nearestDistance =
+		math.huge
+
+	for _,p in ipairs(
+		Players:GetPlayers()
+	) do
+
+		if p ~= LP then
+
+			local c =
+				p.Character
+
+			local r =
+				c and
+				c:FindFirstChild(
+					"HumanoidRootPart"
+				)
+
+			local h =
+				c and
+				c:FindFirstChildOfClass(
+					"Humanoid"
+				)
+
+			if r and h
+				and h.Health > 0 then
+
+				local d =
+					(
+						Root.Position -
+						r.Position
+					).Magnitude
+
+				if d < nearestDistance then
+
+					nearestDistance = d
+					nearestPlayer = p
+				end
+			end
+		end
+	end
+
+	if nearestPlayer
+		and nearestDistance <=
+			WARNING_DISTANCE then
+
+		WarningLabel.Text =
+			"⚠ " ..
+			nearestPlayer.DisplayName ..
+			" đang ở " ..
+			math.floor(
+				nearestDistance
+			) ..
+			"m!"
+
+		WarningLabel.Visible = true
+
+	else
+
+		WarningLabel.Visible = false
+	end
+end
+
+WarningButton.MouseButton1Click:Connect(
+	function()
+
+		WARNING =
+			not WARNING
+
+		WarningButton.Text =
+			WARNING and
+			"WARNING 200M : ON" or
+			"WARNING 200M : OFF"
+
+		WarningButton.BackgroundColor3 =
+			WARNING and
+			Color3.fromRGB(
+				40,
+				180,
+				40
+			) or
+			Color3.fromRGB(
+				50,
+				50,
+				50
+			)
+
+		if not WARNING then
+			WarningLabel.Visible = false
+		end
+	end
+)
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			CheckNearbyPlayers()
+
+			task.wait(0.5)
+		end
+	end
+)
+
+--==================================================
+-- ANTI WATER REFRESH
+--==================================================
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			task.wait(0.1)
+
+			if ANTI_WATER
+				and Character
+				and Character.Parent
+				and Root
+				and Root.Parent then
+
+				if not AntiPart
+					or not AntiPart.Parent then
+
+					CreateAntiPart()
+				end
+			end
+		end
+	end
+)
+
+--==================================================
+-- RESOURCE SCANNER
+--==================================================
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			ScanResources()
+
+			task.wait(
+				RESOURCE_DELAY
+			)
+		end
+	end
+)
+
+--==================================================
+-- PLAYER SCANNER
+--==================================================
+
+task.spawn(
+	function()
+
+		while Gui.Parent do
+
+			ScanPlayers()
+
+			task.wait(
+				PLAYER_DELAY
+			)
+		end
+	end
+)
+
+--==================================================
+-- SHOW BUTTON
+--==================================================
+
+local Show =
+	Instance.new(
+		"TextButton"
+	)
+
+Show.Size =
+	UDim2.fromOffset(
+		48,
+		48
+	)
+
+Show.Position =
+	UDim2.new(
+		0.5,
+		-24,
+		0.3,
+		0
+	)
+
+Show.BackgroundColor3 =
+	Color3.fromRGB(
+		40,
+		40,
+		40
+	)
+
+Show.Text = "⚡"
+
+Show.TextColor3 =
+	Color3.new(
+		1,
+		1,
+		1
+	)
+
+Show.TextSize = 21
+
+Show.Font =
+	Enum.Font.GothamBold
+
+Show.BorderSizePixel = 0
+
+Show.Visible = false
+Show.Active = true
+Show.ZIndex = 900
+
+Show.Parent =
+	Gui
+
+local ShowCorner =
+	Instance.new(
+		"UICorner"
+	)
+
+ShowCorner.CornerRadius =
+	UDim.new(
+		0,
+		10
+	)
+
+ShowCorner.Parent =
+	Show
+
+Hide.MouseButton1Click:Connect(
+	function()
+
+		Main.Visible = false
+		Show.Visible = true
+	end
+)
+
+Show.MouseButton1Click:Connect(
+	function()
+
+		Main.Visible = true
+		Show.Visible = false
+	end
+)
+
+--==================================================
+-- DRAG
+--==================================================
+
+local function Drag(frame)
+
+	local active = false
+	local start
+	local position
+
+	frame.InputBegan:Connect(
+		function(input)
+
+			if input.UserInputType ==
+				Enum.UserInputType.MouseButton1
+				or
+				input.UserInputType ==
+				Enum.UserInputType.Touch then
+
+				active = true
+
+				start =
+					input.Position
+
+				position =
+					frame.Position
+			end
+		end
+	)
+
+	UIS.InputChanged:Connect(
+		function(input)
+
+			if not active then
+				return
+			end
+
+			if input.UserInputType ~=
+				Enum.UserInputType.MouseMovement
+				and
+				input.UserInputType ~=
+				Enum.UserInputType.Touch then
+
+				return
+			end
+
+			local delta =
+				input.Position -
+				start
+
+			frame.Position =
+				UDim2.new(
+					position.X.Scale,
+					position.X.Offset +
+						delta.X,
+					position.Y.Scale,
+					position.Y.Offset +
+						delta.Y
+				)
+		end
+	)
+
+	UIS.InputEnded:Connect(
+		function(input)
+
+			if input.UserInputType ==
+				Enum.UserInputType.MouseButton1
+				or
+				input.UserInputType ==
+				Enum.UserInputType.Touch then
+
+				active = false
+			end
+		end
+	)
+end
+
+local function DragPowerButton(
+	frame
+)
+
+	local active = false
+	local start
+	local position
+
+	frame.InputBegan:Connect(
+		function(input)
+
+			if POWER_LOCK then
+				return
+			end
+
+			if input.UserInputType ==
+				Enum.UserInputType.MouseButton1
+				or
+				input.UserInputType ==
+				Enum.UserInputType.Touch then
+
+				active = true
+
+				start =
+					input.Position
+
+				position =
+					frame.Position
+			end
+		end
+	)
+
+	UIS.InputChanged:Connect(
+		function(input)
+
+			if not active then
+				return
+			end
+
+			if POWER_LOCK then
+
+				active = false
+				return
+			end
+
+			if input.UserInputType ~=
+				Enum.UserInputType.MouseMovement
+				and
+				input.UserInputType ~=
+				Enum.UserInputType.Touch then
+
+				return
+			end
+
+			local delta =
+				input.Position -
+				start
+
+			frame.Position =
+				UDim2.new(
+					position.X.Scale,
+					position.X.Offset +
+						delta.X,
+					position.Y.Scale,
+					position.Y.Offset +
+						delta.Y
+				)
+		end
+	)
+
+	UIS.InputEnded:Connect(
+		function(input)
+
+			if input.UserInputType ==
+				Enum.UserInputType.MouseButton1
+				or
+				input.UserInputType ==
+				Enum.UserInputType.Touch then
+
+				active = false
+			end
+		end
+	)
+end
+
+--==================================================
+-- DRAG OBJECTS
+--==================================================
+
+Drag(Main)
+Drag(Show)
+Drag(SmallSpeed)
+DragPowerButton(SmallPower)
+
+--==================================================
+-- INITIAL VALUES
+--==================================================
+
+OpenTab("MAIN")
+
+-- AIM
+AIM_DISTANCE = 60
+
+AIMDistanceLabel.Text =
+	"AIM DISTANCE: 60"
+
+AIMKnob.Position =
+	UDim2.new(
+		1,
+		-8,
+		0,
+		0
+	)
+
+-- POWER
+POWER_DISTANCE = 10
+
+PowerDistanceLabel.Text =
+	"POWER DISTANCE: 10"
+
+PowerKnob.Position =
+	UDim2.new(
+		0,
+		-7,
+		0,
+		0
+	)
+
+-- SPEED
+SPEED_DISTANCE = 2
+
+SpeedDistanceLabel.Text =
+	"SPEED DISTANCE: 2"
+
+SpeedKnob.Position =
+	UDim2.new(
+		(
+			SPEED_DISTANCE -
+			SPEED_MIN
+		) /
+		(
+			SPEED_MAX -
+			SPEED_MIN
+		),
+		-8,
+		0,
+		0
+	)
+
+-- AURA
+AURA_DISTANCE = 12
+
+AuraDistanceLabel.Text =
+	"AURA DISTANCE: 12"
+
+AuraDistanceKnob.Position =
+	UDim2.new(
+		(
+			AURA_DISTANCE -
+			AURA_MIN_DISTANCE
+		) /
+		(
+			AURA_MAX_DISTANCE -
+			AURA_MIN_DISTANCE
+		),
+		-8,
+		0,
+		0
+	)
+
+AURA_INTERVAL = 0.3
+
+AuraIntervalLabel.Text =
+	"AURA INTERVAL: 0.3S"
+
+AuraIntervalKnob.Position =
+	UDim2.new(
+		(
+			AURA_INTERVAL -
+			AURA_MIN_INTERVAL
+		) /
+		(
+			AURA_MAX_INTERVAL -
+			AURA_MIN_INTERVAL
+		),
+		-8,
+		0,
+		0
+	)
+
+-- TẦM NHÌN
+VIEW_DISTANCE = 30
+
+ViewDistanceLabel.Text =
+	"KHOẢNG CÁCH MỖI LẦN: 30M"
+
+ViewDistanceKnob.Position =
+	UDim2.new(
+		1,
+		-8,
+		0,
+		0
+	)
+
+-- DELAY
+VIEW_DELAY = 0.05
+
+ViewDelayLabel.Text =
+	"DELAY: 0.05S"
+
+ViewDelayKnob.Position =
+	UDim2.new(
+		0,
+		-8,
+		0,
+		0
+	)
+
+--==================================================
+-- ALL FEATURES OFF
+--==================================================
+
+ESP = false
+AIM = false
+AUTO_FARM = false
+
+AI_AUTO_PLAY = false
+AI_WEAPON = false
+
+SPEED = false
+AURA_TELEPORT = false
+
+VIEW_MOVE = false
+
+POWER = false
+
+ANTI_AFK = false
+FULL_BRIGHT = false
+NO_FOG = false
+WARNING = false
+ANTI_WATER = false
+
+--==================================================
+-- RESET BUTTON COLORS
+--==================================================
+
+ESPButton.Text =
+	"ESP : OFF"
+
+FarmButton.Text =
+	"AUTO FARM : OFF"
+
+PowerButton.Text =
+	"POWER : OFF"
+
+AIMButton.Text =
+	"AIM : OFF"
+
+AIButton.Text =
+	"AI AUTO PLAY : OFF"
+
+AIWeaponButton.Text =
+	"AUTO WEAPON : OFF"
+
+SpeedButton.Text =
+	"SPEED : OFF"
+
+SmallSpeed.Text =
+	"SPEED\nOFF"
+
+SmallSpeed.BackgroundColor3 =
+	Color3.fromRGB(
+		50,
+		50,
+		50
+	)
+
+AuraButton.Text =
+	"AURA TELEPORT : OFF"
+
+ViewMoveButton.Text =
+	"DỊCH CHUYỂN LÊN : OFF"
+
+AntiAFKButton.Text =
+	"ANTI AFK : OFF"
+
+BrightButton.Text =
+	"FULL BRIGHT : OFF"
+
+FogButton.Text =
+	"NO FOG : OFF"
+
+WarningButton.Text =
+	"WARNING 200M : OFF"
+
+AntiWaterButton.Text =
+	"ANTI WATER PART : OFF"
+
+--==================================================
+-- INITIAL SCAN
+--==================================================
+
+ScanResources()
+ScanPlayers()
+
+--==================================================
+-- OUTPUT
+--==================================================
+
+print(
+	"[TRIBE V4] Loaded"
+)
+
+print(
+	"[TẦM NHÌN] Distance per move: 30M"
+)
+
+print(
+	"[TẦM NHÌN] Delay: 0.05S"
+)
+
+print(
+	"[TẦM NHÌN] Move Up: OFF"
+)
+
+print(
+	"[TRIBE V4] All features OFF"
+)
+
+--==================================================
+-- END
+--==================================================
