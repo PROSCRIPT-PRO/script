@@ -1,0 +1,183 @@
+--====================================
+-- ANTI WATER V2
+-- LOCAL SCRIPT
+--====================================
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local Player = Players.LocalPlayer
+
+local Active = false
+local Connection
+local Replaced = {}
+
+--====================================
+-- GUI
+--====================================
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AntiWaterV2"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 180, 0, 90)
+Frame.Position = UDim2.new(0.5, -90, 0.5, -45)
+Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 10)
+Corner.Parent = Frame
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(0, 170, 255)
+Stroke.Thickness = 1.5
+Stroke.Parent = Frame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.BackgroundTransparency = 1
+Title.Text = "ANTI WATER V2"
+Title.TextColor3 = Color3.fromRGB(0, 170, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Frame
+
+local Button = Instance.new("TextButton")
+Button.Size = UDim2.new(1, -20, 0, 35)
+Button.Position = UDim2.new(0, 10, 0, 30)
+Button.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
+Button.Text = "OFF"
+Button.TextColor3 = Color3.new(1, 1, 1)
+Button.TextSize = 14
+Button.Font = Enum.Font.GothamBold
+Button.Parent = Frame
+
+Instance.new("UICorner", Button).CornerRadius =
+    UDim.new(0, 8)
+
+local Status = Instance.new("TextLabel")
+Status.Size = UDim2.new(1, 0, 0, 20)
+Status.Position = UDim2.new(0, 0, 0, 68)
+Status.BackgroundTransparency = 1
+Status.Text = "Ready"
+Status.TextColor3 = Color3.fromRGB(200, 200, 200)
+Status.TextSize = 11
+Status.Parent = Frame
+
+--====================================
+-- FIND RIVER
+--====================================
+
+local function ReplacePart(Part)
+
+    if not Part:IsA("BasePart") then
+        return
+    end
+
+    if Part.Name:lower() ~= "river" then
+        return
+    end
+
+    if Replaced[Part] then
+        return
+    end
+
+    Replaced[Part] = true
+
+    local OldCFrame = Part.CFrame
+    local OldSize = Part.Size
+    local OldColor = Part.Color
+
+    local NewPart = Instance.new("Part")
+
+    NewPart.Name = "AntiWaterPart"
+    NewPart.CFrame = OldCFrame
+    NewPart.Size = OldSize
+    NewPart.Color = OldColor
+
+    NewPart.Anchored = true
+    NewPart.CanCollide = true
+    NewPart.Transparency = 0
+    NewPart.Material = Enum.Material.Plastic
+
+    NewPart.Parent = Workspace
+
+    -- Ẩn river trên máy local
+    Part.LocalTransparencyModifier = 1
+    Part.CanCollide = false
+
+    Status.Text = "River replaced"
+end
+
+--====================================
+-- SCAN
+--====================================
+
+local function Scan()
+
+    local Count = 0
+
+    for _, Object in ipairs(Workspace:GetDescendants()) do
+
+        if Object:IsA("BasePart")
+            and Object.Name:lower() == "river" then
+
+            ReplacePart(Object)
+            Count += 1
+        end
+    end
+
+    Status.Text = "Found: " .. Count
+end
+
+--====================================
+-- TOGGLE
+--====================================
+
+Button.MouseButton1Click:Connect(function()
+
+    Active = not Active
+
+    if Active then
+
+        Button.Text = "ON"
+        Button.BackgroundColor3 =
+            Color3.fromRGB(20, 150, 80)
+
+        Scan()
+
+        Connection = Workspace.DescendantAdded:Connect(
+            function(Object)
+
+                if not Active then
+                    return
+                end
+
+                if Object:IsA("BasePart")
+                    and Object.Name:lower() == "river" then
+
+                    task.wait(0.1)
+                    ReplacePart(Object)
+                end
+            end
+        )
+
+    else
+
+        Button.Text = "OFF"
+        Button.BackgroundColor3 =
+            Color3.fromRGB(150, 40, 40)
+
+        if Connection then
+            Connection:Disconnect()
+            Connection = nil
+        end
+
+        Status.Text = "Disabled"
+    end
+end)
