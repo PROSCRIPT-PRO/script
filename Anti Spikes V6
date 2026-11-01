@@ -1,0 +1,619 @@
+
+--==================================================
+-- ANTI SPIKES V6
+-- LOADING + REAL SIZE SHIELD
+-- ROBLOX STUDIO - LOCAL SCRIPT
+-- ANDROID / PC
+--==================================================
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+--==================================================
+-- SETTINGS
+--==================================================
+
+local Enabled = false
+local MaxTargets = 5
+local WarningDistance = 20
+local UpdateDelay = 0.5
+
+local Objects = {}
+local LastWarning = 0
+local Timer = 0
+
+--==================================================
+-- SCREEN GUI
+--==================================================
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "AntiSpikesV6"
+Gui.ResetOnSpawn = false
+Gui.IgnoreGuiInset = true
+Gui.Parent = PlayerGui
+
+--==================================================
+-- LOADING SCREEN
+--==================================================
+
+local Loading = Instance.new("Frame")
+Loading.Name = "LoadingScreen"
+Loading.Size = UDim2.fromScale(1, 1)
+Loading.BackgroundColor3 = Color3.fromRGB(8, 12, 22)
+Loading.BorderSizePixel = 0
+Loading.ZIndex = 100
+Loading.Parent = Gui
+
+local LoadingTitle = Instance.new("TextLabel")
+LoadingTitle.Size = UDim2.new(1, 0, 0, 50)
+LoadingTitle.Position = UDim2.new(0, 0, 0.35, 0)
+LoadingTitle.BackgroundTransparency = 1
+LoadingTitle.Text = "ANTI SPIKES V6"
+LoadingTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
+LoadingTitle.Font = Enum.Font.GothamBold
+LoadingTitle.TextSize = 25
+LoadingTitle.ZIndex = 101
+LoadingTitle.Parent = Loading
+
+local SubTitle = Instance.new("TextLabel")
+SubTitle.Size = UDim2.new(1, 0, 0, 25)
+SubTitle.Position = UDim2.new(0, 0, 0.43, 0)
+SubTitle.BackgroundTransparency = 1
+SubTitle.Text = "INITIALIZING SYSTEM..."
+SubTitle.TextColor3 = Color3.fromRGB(160, 190, 220)
+SubTitle.Font = Enum.Font.Gotham
+SubTitle.TextSize = 12
+SubTitle.ZIndex = 101
+SubTitle.Parent = Loading
+
+local BarBG = Instance.new("Frame")
+BarBG.Size = UDim2.new(0.7, 0, 0, 12)
+BarBG.Position = UDim2.new(0.15, 0, 0.53, 0)
+BarBG.BackgroundColor3 = Color3.fromRGB(30, 40, 55)
+BarBG.BorderSizePixel = 0
+BarBG.ZIndex = 101
+BarBG.Parent = Loading
+
+Instance.new("UICorner", BarBG).CornerRadius =
+    UDim.new(1, 0)
+
+local Bar = Instance.new("Frame")
+Bar.Size = UDim2.new(0, 0, 1, 0)
+Bar.BackgroundColor3 = Color3.fromRGB(0, 190, 255)
+Bar.BorderSizePixel = 0
+Bar.ZIndex = 102
+Bar.Parent = BarBG
+
+Instance.new("UICorner", Bar).CornerRadius =
+    UDim.new(1, 0)
+
+local BarStroke = Instance.new("UIStroke")
+BarStroke.Color = Color3.fromRGB(0, 220, 255)
+BarStroke.Thickness = 1
+BarStroke.Parent = Bar
+
+local Percent = Instance.new("TextLabel")
+Percent.Size = UDim2.new(1, 0, 0, 30)
+Percent.Position = UDim2.new(0, 0, 0.59, 0)
+Percent.BackgroundTransparency = 1
+Percent.Text = "1%"
+Percent.TextColor3 = Color3.fromRGB(0, 210, 255)
+Percent.Font = Enum.Font.GothamBold
+Percent.TextSize = 17
+Percent.ZIndex = 101
+Percent.Parent = Loading
+
+local LoadingTime = 5
+local StartTime = os.clock()
+
+for i = 1, 100 do
+
+    Percent.Text = i .. "%"
+
+    TweenService:Create(
+        Bar,
+        TweenInfo.new(LoadingTime / 100, Enum.EasingStyle.Linear),
+        {
+            Size = UDim2.new(i / 100, 0, 1, 0)
+        }
+    ):Play()
+
+    task.wait(LoadingTime / 100)
+end
+
+SubTitle.Text = "LOADING COMPLETE!"
+
+task.wait(0.2)
+
+--==================================================
+-- MAIN GUI
+--==================================================
+
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.fromOffset(250, 190)
+Main.Position = UDim2.new(0.5, -125, 0.5, -95)
+Main.BackgroundColor3 = Color3.fromRGB(15, 20, 30)
+Main.BorderSizePixel = 0
+Main.Visible = false
+Main.Parent = Gui
+
+Instance.new("UICorner", Main).CornerRadius =
+    UDim.new(0, 12)
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(0, 180, 255)
+Stroke.Thickness = 2
+Stroke.Parent = Main
+
+--==================================================
+-- TITLE
+--==================================================
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -45, 0, 40)
+Title.Position = UDim2.fromOffset(8, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "ANTI SPIKES V6"
+Title.TextColor3 = Color3.fromRGB(0, 200, 255)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 17
+Title.Parent = Main
+
+--==================================================
+-- HIDE BUTTON
+--==================================================
+
+local Hide = Instance.new("TextButton")
+Hide.Size = UDim2.fromOffset(30, 30)
+Hide.Position = UDim2.new(1, -35, 0, 5)
+Hide.Text = "-"
+Hide.TextSize = 22
+Hide.TextColor3 = Color3.new(1, 1, 1)
+Hide.BackgroundColor3 = Color3.fromRGB(40, 50, 65)
+Hide.Parent = Main
+
+Instance.new("UICorner", Hide).CornerRadius =
+    UDim.new(0, 7)
+
+--==================================================
+-- ON / OFF
+--==================================================
+
+local Toggle = Instance.new("TextButton")
+Toggle.Size = UDim2.new(1, -20, 0, 40)
+Toggle.Position = UDim2.fromOffset(10, 45)
+Toggle.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
+Toggle.Text = "ANTI SPIKES : OFF"
+Toggle.TextColor3 = Color3.new(1, 1, 1)
+Toggle.Font = Enum.Font.GothamBold
+Toggle.TextSize = 14
+Toggle.Parent = Main
+
+Instance.new("UICorner", Toggle).CornerRadius =
+    UDim.new(0, 8)
+
+--==================================================
+-- STATUS
+--==================================================
+
+local Status = Instance.new("TextLabel")
+Status.Size = UDim2.new(1, -20, 0, 85)
+Status.Position = UDim2.fromOffset(10, 95)
+Status.BackgroundColor3 = Color3.fromRGB(27, 33, 46)
+Status.TextColor3 = Color3.fromRGB(220, 235, 255)
+Status.TextSize = 12
+Status.Font = Enum.Font.Gotham
+Status.TextWrapped = true
+Status.TextYAlignment = Enum.TextYAlignment.Center
+Status.Text = "Trạng thái: OFF"
+Status.Parent = Main
+
+Instance.new("UICorner", Status).CornerRadius =
+    UDim.new(0, 8)
+
+--==================================================
+-- OPEN BUTTON
+--==================================================
+
+local Open = Instance.new("TextButton")
+Open.Size = UDim2.fromOffset(45, 45)
+Open.Position = UDim2.new(0, 15, 0.5, 0)
+Open.BackgroundColor3 = Color3.fromRGB(0, 140, 220)
+Open.Text = "⚡"
+Open.TextSize = 22
+Open.Visible = false
+Open.Parent = Gui
+
+Instance.new("UICorner", Open).CornerRadius =
+    UDim.new(1, 0)
+
+--==================================================
+-- HIDE / SHOW
+--==================================================
+
+Hide.Activated:Connect(function()
+    Main.Visible = false
+    Open.Visible = true
+end)
+
+Open.Activated:Connect(function()
+    Main.Visible = true
+    Open.Visible = false
+end)
+
+--==================================================
+-- NOTIFICATION
+--==================================================
+
+local function Notify(message)
+
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = "ANTI SPIKES",
+            Text = message,
+            Duration = 2
+        })
+    end)
+
+end
+
+--==================================================
+-- CLEAR OBJECTS
+--==================================================
+
+local function ClearObjects()
+
+    for model, data in pairs(Objects) do
+
+        if data.Box then
+            data.Box:Destroy()
+        end
+
+        if data.Highlight then
+            data.Highlight:Destroy()
+        end
+
+    end
+
+    table.clear(Objects)
+end
+
+--==================================================
+-- CREATE SHIELD
+--==================================================
+
+local function CreateShield(model)
+
+    local Box = Instance.new("Part")
+
+    Box.Name = "AntiSpikes_Shield"
+    Box.Anchored = true
+
+    Box.CanCollide = true
+    Box.CanTouch = false
+    Box.CanQuery = false
+
+    Box.CastShadow = false
+    Box.Material = Enum.Material.ForceField
+    Box.Color = Color3.fromRGB(0, 170, 255)
+    Box.Transparency = 0.45
+
+    Box.Parent = Workspace
+
+    local Highlight = Instance.new("Highlight")
+
+    Highlight.Name = "AntiSpikes_Highlight"
+    Highlight.Adornee = model
+    Highlight.FillColor =
+        Color3.fromRGB(0, 170, 255)
+
+    Highlight.OutlineColor =
+        Color3.fromRGB(0, 255, 255)
+
+    Highlight.FillTransparency = 0.8
+    Highlight.OutlineTransparency = 0
+
+    Highlight.Parent = model
+
+    return {
+        Box = Box,
+        Highlight = Highlight
+    }
+end
+
+--==================================================
+-- UPDATE SHIELD - REAL SIZE
+--==================================================
+
+local function UpdateShield(model, data)
+
+    if not model.Parent then
+        return
+    end
+
+    local Success, CF, Size = pcall(function()
+        return model:GetBoundingBox()
+    end)
+
+    if not Success then
+        return
+    end
+
+    data.Box.Size = Vector3.new(
+        math.max(Size.X, 0.05),
+        math.max(Size.Y, 0.05),
+        math.max(Size.Z, 0.05)
+    )
+
+    data.Box.CFrame = CF
+end
+
+--==================================================
+-- FIND SPIKES MODELS
+--==================================================
+
+local function FindSpikes()
+
+    local Character = Player.Character
+
+    local Root = Character and
+        Character:FindFirstChild("HumanoidRootPart")
+
+    if not Root then
+        return {}, nil
+    end
+
+    local Found = {}
+    local Seen = {}
+
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+
+        if obj:IsA("Model")
+            and obj.Name:lower() == "spikes"
+            and not Seen[obj] then
+
+            Seen[obj] = true
+
+            local Position = obj:GetPivot().Position
+
+            local Distance =
+                (Position - Root.Position).Magnitude
+
+            table.insert(Found, {
+                Model = obj,
+                Distance = Distance
+            })
+
+        end
+
+    end
+
+    table.sort(Found, function(a, b)
+        return a.Distance < b.Distance
+    end)
+
+    return Found, Root
+end
+
+--==================================================
+-- UPDATE SYSTEM
+--==================================================
+
+local function UpdateSystem()
+
+    if not Enabled then
+        return
+    end
+
+    local Found, Root = FindSpikes()
+
+    if not Root then
+        Status.Text = "Không tìm thấy nhân vật!"
+        return
+    end
+
+    local Active = {}
+    local NearCount = 0
+
+    local TargetCount = math.min(#Found, MaxTargets)
+
+    for i = 1, TargetCount do
+
+        local model = Found[i].Model
+
+        Active[model] = true
+
+        if not Objects[model] then
+            Objects[model] = CreateShield(model)
+        end
+
+        UpdateShield(model, Objects[model])
+
+        if Found[i].Distance <= WarningDistance then
+            NearCount += 1
+        end
+
+    end
+
+    -- Remove old targets
+
+    for model, data in pairs(Objects) do
+
+        if not Active[model] or not model.Parent then
+
+            if data.Box then
+                data.Box:Destroy()
+            end
+
+            if data.Highlight then
+                data.Highlight:Destroy()
+            end
+
+            Objects[model] = nil
+        end
+
+    end
+
+    Status.Text = string.format(
+        "ANTI SPIKES: ON\n" ..
+        "Highlight: %d / 5\n" ..
+        "Shield: %d / 5\n" ..
+        "Spikes gần: %d\n" ..
+        "Warning: %.0f studs",
+
+        TargetCount,
+        TargetCount,
+        NearCount,
+        WarningDistance
+    )
+
+    if NearCount > 0 and os.clock() - LastWarning >= 2 then
+
+        LastWarning = os.clock()
+
+        Notify("Phát hiện Spikes ở gần!")
+
+    end
+
+end
+
+--==================================================
+-- TOGGLE
+--==================================================
+
+Toggle.Activated:Connect(function()
+
+    Enabled = not Enabled
+
+    if Enabled then
+
+        Toggle.Text = "ANTI SPIKES : ON"
+
+        Toggle.BackgroundColor3 =
+            Color3.fromRGB(0, 150, 90)
+
+        Status.Text = "Đang quét Spikes..."
+
+        UpdateSystem()
+
+        Notify("Anti Spikes đã bật")
+
+    else
+
+        Toggle.Text = "ANTI SPIKES : OFF"
+
+        Toggle.BackgroundColor3 =
+            Color3.fromRGB(150, 40, 40)
+
+        ClearObjects()
+
+        Status.Text = "Trạng thái: OFF"
+
+        Notify("Anti Spikes đã tắt")
+
+    end
+
+end)
+
+--==================================================
+-- UPDATE LOOP
+--==================================================
+
+RunService.Heartbeat:Connect(function(dt)
+
+    if not Enabled then
+        return
+    end
+
+    Timer += dt
+
+    if Timer >= UpdateDelay then
+
+        Timer = 0
+
+        UpdateSystem()
+
+    end
+
+end)
+
+--==================================================
+-- DRAG GUI - ANDROID / PC
+--==================================================
+
+local Dragging = false
+local DragStart
+local StartPosition
+
+Title.InputBegan:Connect(function(input)
+
+    if input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseButton1 then
+
+        Dragging = true
+        DragStart = input.Position
+        StartPosition = Main.Position
+
+    end
+
+end)
+
+UIS.InputChanged:Connect(function(input)
+
+    if Dragging and (
+        input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseMovement
+    ) then
+
+        local Delta = input.Position - DragStart
+
+        Main.Position = UDim2.new(
+            StartPosition.X.Scale,
+            StartPosition.X.Offset + Delta.X,
+            StartPosition.Y.Scale,
+            StartPosition.Y.Offset + Delta.Y
+        )
+
+    end
+
+end)
+
+UIS.InputEnded:Connect(function(input)
+
+    if input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseButton1 then
+
+        Dragging = false
+
+    end
+
+end)
+
+--==================================================
+-- LOADING FADE
+--==================================================
+
+Main.Visible = true
+
+local Fade = TweenService:Create(
+    Loading,
+    TweenInfo.new(0.5, Enum.EasingStyle.Quad),
+    {
+        BackgroundTransparency = 1
+    }
+)
+
+Fade:Play()
+Fade.Completed:Wait()
+
+Loading:Destroy()
+
+print("ANTI SPIKES V6 LOADED")
