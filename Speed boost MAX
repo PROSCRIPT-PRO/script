@@ -1,0 +1,145 @@
+
+-- SPEED BOOST GUI
+-- 4 STUD / 0.5 SECOND
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local Player = Players.LocalPlayer
+
+local DISTANCE = 4
+local INTERVAL = 0.5
+
+local Enabled = false
+local LastMove = 0
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SpeedBoostGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.new(0, 155, 0, 65)
+Main.Position = UDim2.new(0.5, -77, 0.5, -32)
+Main.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 10)
+Corner.Parent = Main
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(0, 170, 255)
+Stroke.Thickness = 1.5
+Stroke.Parent = Main
+
+-- TITLE
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.BackgroundTransparency = 1
+Title.Text = "SPEED BOOST"
+Title.TextColor3 = Color3.fromRGB(0, 200, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Main
+
+-- BUTTON
+local Button = Instance.new("TextButton")
+Button.Size = UDim2.new(1, -16, 0, 27)
+Button.Position = UDim2.new(0, 8, 0, 31)
+Button.BackgroundColor3 = Color3.fromRGB(170, 45, 45)
+Button.Text = "OFF"
+Button.TextColor3 = Color3.new(1, 1, 1)
+Button.TextSize = 12
+Button.Font = Enum.Font.GothamBold
+Button.Parent = Main
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 7)
+ButtonCorner.Parent = Button
+
+-- ON / OFF
+Button.Activated:Connect(function()
+    Enabled = not Enabled
+
+    if Enabled then
+        Button.Text = "ON"
+        Button.BackgroundColor3 = Color3.fromRGB(0, 150, 90)
+        LastMove = tick()
+    else
+        Button.Text = "OFF"
+        Button.BackgroundColor3 = Color3.fromRGB(170, 45, 45)
+    end
+end)
+
+-- SPEED BOOST
+RunService.Heartbeat:Connect(function()
+    if not Enabled then return end
+
+    local Character = Player.Character
+    if not Character then return end
+
+    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+    local Root = Character:FindFirstChild("HumanoidRootPart")
+
+    if not Humanoid or not Root then return end
+
+    local Direction = Humanoid.MoveDirection
+
+    if Direction.Magnitude > 0.05 then
+        if tick() - LastMove >= INTERVAL then
+            LastMove = tick()
+
+            Root.CFrame = Root.CFrame
+                + Direction.Unit * DISTANCE
+        end
+    else
+        LastMove = tick()
+    end
+end)
+
+-- DRAG GUI (ANDROID + PC)
+local Dragging = false
+local DragStart
+local StartPosition
+local DragInput
+
+Main.InputBegan:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton1
+    or Input.UserInputType == Enum.UserInputType.Touch then
+
+        Dragging = true
+        DragStart = Input.Position
+        StartPosition = Main.Position
+
+        Input.Changed:Connect(function()
+            if Input.UserInputState == Enum.UserInputState.End then
+                Dragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseMovement
+    or Input.UserInputType == Enum.UserInputType.Touch then
+        DragInput = Input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(Input)
+    if Dragging and Input == DragInput then
+        local Delta = Input.Position - DragStart
+
+        Main.Position = UDim2.new(
+            StartPosition.X.Scale,
+            StartPosition.X.Offset + Delta.X,
+            StartPosition.Y.Scale,
+            StartPosition.Y.Offset + Delta.Y
+        )
+    end
+end)
