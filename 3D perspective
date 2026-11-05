@@ -1,0 +1,392 @@
+
+--==================================================
+-- MOBILE CAMERA V8
+-- ROBLOX ANDROID
+-- LOCAL SCRIPT
+-- StarterPlayer > StarterPlayerScripts
+--==================================================
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+--==================================================
+-- CLEANUP OLD VERSION
+--==================================================
+
+pcall(function()
+    RunService:UnbindFromRenderStep("MobileCamera3D")
+end)
+
+local OldGui = PlayerGui:FindFirstChild("MobileCamera3DGui")
+if OldGui then
+    OldGui:Destroy()
+end
+
+--==================================================
+-- SETTINGS
+--==================================================
+
+local Enabled = true
+
+local Distance = 12
+local MinDistance = 3
+local MaxDistance = 60
+
+local Yaw = 0
+local Pitch = math.rad(-15)
+
+local Sensitivity = 0.012
+local ZoomSensitivity = 0.025
+
+local Root
+local LastFocus = Vector3.zero
+
+--==================================================
+-- CHARACTER
+--==================================================
+
+local function SetupCharacter(Character)
+    Root = Character:WaitForChild("HumanoidRootPart")
+
+    if not Enabled then
+        LastFocus = Root.Position + Vector3.new(0, 2, 0)
+    end
+end
+
+if Player.Character then
+    task.spawn(SetupCharacter, Player.Character)
+end
+
+Player.CharacterAdded:Connect(SetupCharacter)
+
+--==================================================
+-- CUSTOM CAMERA
+--==================================================
+
+local CustomCamera = Instance.new("Camera")
+CustomCamera.Name = "MobileCamera3D"
+CustomCamera.CameraType = Enum.CameraType.Scriptable
+CustomCamera.FieldOfView = 70
+CustomCamera.Parent = Workspace
+
+--==================================================
+-- GUI
+--==================================================
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "MobileCamera3DGui"
+Gui.ResetOnSpawn = false
+Gui.IgnoreGuiInset = true
+Gui.Parent = PlayerGui
+
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.fromOffset(175, 105)
+Main.Position = UDim2.new(0, 15, 0.35, 0)
+Main.BackgroundColor3 = Color3.fromRGB(15, 20, 32)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Parent = Gui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = Main
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(0, 190, 255)
+Stroke.Thickness = 2
+Stroke.Parent = Main
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 32)
+Title.BackgroundColor3 = Color3.fromRGB(0, 90, 140)
+Title.Text = "MOBILE CAMERA"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.TextSize = 13
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Main
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = Title
+
+local Toggle = Instance.new("TextButton")
+Toggle.Size = UDim2.new(1, -20, 0, 43)
+Toggle.Position = UDim2.fromOffset(10, 48)
+Toggle.BackgroundColor3 = Color3.fromRGB(0, 130, 90)
+Toggle.Text = "CAMERA ON"
+Toggle.TextColor3 = Color3.new(1, 1, 1)
+Toggle.TextSize = 14
+Toggle.Font = Enum.Font.GothamBold
+Toggle.Parent = Main
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 8)
+ToggleCorner.Parent = Toggle
+
+--==================================================
+-- DRAG GUI
+--==================================================
+
+local DragBar = Instance.new("TextButton")
+DragBar.Size = UDim2.new(1, 0, 0, 32)
+DragBar.BackgroundTransparency = 1
+DragBar.Text = ""
+DragBar.Parent = Main
+
+local DragTouch
+local DragStart
+local StartPosition
+
+DragBar.InputBegan:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.Touch then
+        DragTouch = Input
+        DragStart = Input.Position
+        StartPosition = Main.Position
+    end
+end)
+
+UIS.TouchMoved:Connect(function(Input)
+    if Input == DragTouch then
+        local Delta = Input.Position - DragStart
+
+        Main.Position = UDim2.new(
+            StartPosition.X.Scale,
+            StartPosition.X.Offset + Delta.X,
+            StartPosition.Y.Scale,
+            StartPosition.Y.Offset + Delta.Y
+        )
+    end
+end)
+
+UIS.TouchEnded:Connect(function(Input)
+    if Input == DragTouch then
+        DragTouch = nil
+        DragStart = nil
+        StartPosition = nil
+    end
+end)
+
+--==================================================
+-- GUI AREA CHECK
+--==================================================
+
+local function IsInsideGui(Position)
+    local P = Main.AbsolutePosition
+    local S = Main.AbsoluteSize
+
+    return Position.X >= P.X
+        and Position.X <= P.X + S.X
+        and Position.Y >= P.Y
+        and Position.Y <= P.Y + S.Y
+end
+
+--==================================================
+-- TOUCH CONTROL
+--==================================================
+
+local Touches = {}
+local PinchPrevious = nil
+
+local function GetActiveTouches()
+    local Result = {}
+
+    for _, Data in pairs(Touches) do
+        table.insert(Result, Data)
+    end
+
+    return Result
+end
+
+UIS.TouchStarted:Connect(function(Input, Processed)
+    if Enabled then
+        return
+    end
+
+    if IsInsideGui(Input.Position) then
+        return
+    end
+
+    Touches[Input] = {
+        Position = Input.Position
+    }
+
+    local Active = GetActiveTouches()
+
+    if #Active >= 2 then
+        PinchPrevious = (
+            Active[1].Position - Active[2].Position
+        ).Magnitude
+    end
+end)
+
+UIS.TouchMoved:Connect(function(Input)
+    if Enabled then
+        return
+    end
+
+    local Data = Touches[Input]
+    if not Data then
+        return
+    end
+
+    local OldPosition = Data.Position
+    local NewPosition = Input.Position
+
+    Data.Position = NewPosition
+
+    local Active = GetActiveTouches()
+
+    if #Active >= 2 then
+        local NewDistance = (
+            Active[1].Position - Active[2].Position
+        ).Magnitude
+
+        if PinchPrevious then
+            local Difference = NewDistance - PinchPrevious
+
+            Distance = math.clamp(
+                Distance - Difference * ZoomSensitivity,
+                MinDistance,
+                MaxDistance
+            )
+        end
+
+        PinchPrevious = NewDistance
+        return
+    end
+
+    if #Active == 1 then
+        local Delta = NewPosition - OldPosition
+
+        Yaw = Yaw - Delta.X * Sensitivity
+
+        Pitch = math.clamp(
+            Pitch - Delta.Y * Sensitivity,
+            math.rad(-85),
+            math.rad(85)
+        )
+    end
+end)
+
+UIS.TouchEnded:Connect(function(Input)
+    Touches[Input] = nil
+    PinchPrevious = nil
+end)
+
+--==================================================
+-- CAMERA MODE
+--==================================================
+
+local function EnableDefaultCamera()
+    RunService:UnbindFromRenderStep("MobileCamera3D")
+
+    local DefaultCamera = Workspace.CurrentCamera
+
+    if DefaultCamera == CustomCamera then
+        DefaultCamera = nil
+    end
+
+    -- Roblox creates or restores its default camera
+    if not DefaultCamera then
+        CustomCamera:Destroy()
+        Workspace.CurrentCamera = nil
+
+        repeat
+            RunService.RenderStepped:Wait()
+            DefaultCamera = Workspace.CurrentCamera
+        until DefaultCamera and DefaultCamera ~= CustomCamera
+    end
+
+    local Character = Player.Character
+    local Humanoid = Character and
+        Character:FindFirstChildOfClass("Humanoid")
+
+    if Humanoid then
+        DefaultCamera.CameraSubject = Humanoid
+    end
+
+    DefaultCamera.CameraType = Enum.CameraType.Custom
+
+    table.clear(Touches)
+    PinchPrevious = nil
+end
+
+local function EnableCustomCamera()
+    if not CustomCamera.Parent then
+        CustomCamera = Instance.new("Camera")
+        CustomCamera.Name = "MobileCamera3D"
+        CustomCamera.CameraType = Enum.CameraType.Scriptable
+        CustomCamera.FieldOfView = 70
+        CustomCamera.Parent = Workspace
+    end
+
+    if Root and Root.Parent then
+        LastFocus = Root.Position + Vector3.new(0, 2, 0)
+    end
+
+    Workspace.CurrentCamera = CustomCamera
+    CustomCamera.CameraType = Enum.CameraType.Scriptable
+
+    table.clear(Touches)
+    PinchPrevious = nil
+
+    RunService:BindToRenderStep(
+        "MobileCamera3D",
+        Enum.RenderPriority.Camera.Value,
+        function()
+            local Rotation = CFrame.fromOrientation(
+                Pitch,
+                Yaw,
+                0
+            )
+
+            local Offset = Rotation:VectorToWorldSpace(
+                Vector3.new(0, 0, Distance)
+            )
+
+            CustomCamera.CFrame = CFrame.lookAt(
+                LastFocus + Offset,
+                LastFocus
+            )
+        end
+    )
+end
+
+--==================================================
+-- BUTTON
+--==================================================
+
+Toggle.Activated:Connect(function()
+    Enabled = not Enabled
+
+    if Enabled then
+        Toggle.Text = "CAMERA ON"
+        Toggle.BackgroundColor3 =
+            Color3.fromRGB(0, 130, 90)
+
+        EnableDefaultCamera()
+    else
+        Toggle.Text = "CAMERA OFF"
+        Toggle.BackgroundColor3 =
+            Color3.fromRGB(150, 45, 45)
+
+        EnableCustomCamera()
+    end
+end)
+
+--==================================================
+-- INITIAL STATE
+--==================================================
+
+Enabled = true
+Toggle.Text = "CAMERA ON"
+Toggle.BackgroundColor3 = Color3.fromRGB(0, 130, 90)
+
+-- Keep Roblox default camera active initially.
+print("MOBILE CAMERA V8 LOADED")
